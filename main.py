@@ -1,5 +1,7 @@
 import requests
 import time
+import json
+import os
 
 TELEGRAM_TOKEN = "8715088429:AAEfwN6qsWy-GOxTkAJ8oLGUpwVOc-H1sAM"
 CHAT_ID = "8956179287"
@@ -8,6 +10,7 @@ TREND_INTERVAL = "1day"
 ENTRY_INTERVALS = ["1hour", "4hour"]
 TOP_N = 15
 TOLERANCE = 0.003
+MEMORY_FILE = "last_alerts.json"
 
 STABLECOINS = [
     'USDC','FDUSD','TUSD','BUSD','DAI','USDP','EUR','GBP','USD1','USDE',
@@ -18,7 +21,16 @@ STABLECOINS = [
 ]
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-last_alert_time = {}
+
+if os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, 'r') as f:
+        last_alert_time = json.load(f)
+else:
+    last_alert_time = {}
+
+def save_memory():
+    with open(MEMORY_FILE, 'w') as f:
+        json.dump(last_alert_time, f)
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -91,13 +103,15 @@ def check_setup(symbol, interval, trend):
     buy = (trend == "UP") and l <= sma7 * (1 + TOLERANCE) and body_low > sma7 * (1 - TOLERANCE) and body_low > mid
     sell = (trend == "DOWN") and h >= sma7 * (1 - TOLERANCE) and body_high < sma7 * (1 + TOLERANCE) and body_high < mid
     if buy:
-        print(f"BUY: {symbol} {interval}")
+        print(f"BUY: {symbol} {interval} | O:{o} C:{c} H:{h} L:{l} SMA7:{sma7:.4f} MID:{mid:.4f}")
         send_telegram(f"BUY - {symbol} - {interval}")
         last_alert_time[key] = last_time
+        save_memory()
     elif sell:
-        print(f"SELL: {symbol} {interval}")
+        print(f"SELL: {symbol} {interval} | O:{o} C:{c} H:{h} L:{l} SMA7:{sma7:.4f} MID:{mid:.4f}")
         send_telegram(f"SELL - {symbol} - {interval}")
         last_alert_time[key] = last_time
+        save_memory()
 
 def main():
     print("Bot cycle started...")
