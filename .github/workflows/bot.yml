@@ -8,6 +8,8 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,3 +24,11 @@ jobs:
 
       - name: Run bot
         run: python main.py
+
+      - name: Save memory file
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add last_alerts.json
+          git commit -m "Update alerts memory" || echo "No changes"
+          git push || echo "No push needed"
