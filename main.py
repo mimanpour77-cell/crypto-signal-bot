@@ -7,10 +7,12 @@ TELEGRAM_TOKEN = "8715088429:AAEfwN6qsWy-GOxTkAJ8oLGUpwVOc-H1sAM"
 CHAT_ID = "8956179287"
 
 TREND_INTERVAL = "1day"
-ENTRY_INTERVALS = ["1hour", "4hour"]
-TOP_N = 15
+ENTRY_INTERVALS = ["4hour"]
+TOP_N = 100
 TOLERANCE = 0.001
 MEMORY_FILE = "last_alerts.json"
+SMA_PERIOD = 25
+BTC_SYMBOL = "BTC-USDT"
 
 STABLECOINS = [
     'USDC','FDUSD','TUSD','BUSD','DAI','USDP','EUR','GBP','USD1','USDE',
@@ -40,6 +42,14 @@ def send_telegram(message):
     except Exception as e:
         print(f"TG ERROR: {e}")
 
+def fetch_candles(symbol, interval):
+    try:
+        data = requests.get(f"https://api.kucoin.com/api/v1/market/candles?type={interval}&symbol={symbol}", headers=HEADERS, timeout=15).json()
+        return data.get('data', [])
+    except Exception as e:
+        print(f"CANDLES ERROR {symbol} {interval}: {e}")
+        return []
+
 def get_top_symbols():
     try:
         data = requests.get("https://api.kucoin.com/api/v1/market/allTickers", headers=HEADERS, timeout=15).json()
@@ -58,32 +68,50 @@ def get_top_symbols():
     pairs.sort(key=lambda x: x[1], reverse=True)
     return [p[0] for p in pairs[:TOP_N]]
 
-def get_daily_trend(symbol):
-    try:
-        data = requests.get(f"https://api.kucoin.com/api/v1/market/candles?type={TREND_INTERVAL}&symbol={symbol}", headers=HEADERS, timeout=15).json()
-    except Exception as e:
-        print(f"TREND ERROR {symbol}: {e}")
-        return None
-    candles = data.get('data', [])
-    if not candles or len(candles) < 52:
+def get_btc_daily_closes():
+    candles = fetch_candles(BTC_SYMBOL, TREND_INTERVAL)
+    if not candles or len(candles) < SMA_PERIOD + 2:
         return None
     candles = sorted(candles, key=lambda x: int(x[0]))
-    closes = [float(c[2]) for c in candles[:-1]]
-    sma50 = sum(closes[-50:]) / 50
-    last = closes[-1]
-    if last > sma50:
-        return "UP"
-    elif last < sma50:
-        return "DOWN"
+    return {c[0]: float(c[2]) for c in candles[:-1]}
+
+def get_coin_trend(symbol, btc_closes):
+    if symbol == BTC_SYMBOL:
+        return None
+
+    candles = fetch_candles(symbol, TREND_INTERVAL)
+    if not candles or len(candles) < SMA_PERIOD + 2:
+        return None
+
+    candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
+    coin_closes = {c[0]: float(c[2]) for c in candles}
+
+    closes_list = list(coin_closes.values())
+    sma25 = sum(closes_list[-SMA_PERIOD:]) / SMA_PERIOD
+    last_close = closes_list[-1]
+    coin_trend = "UP" if last_close > sma25 else "DOWN"
+
+    if btc_closes is None:
+        print(f"TREND {symbol}: own={coin_trend} rel=NO_BTC")
+        return None
+
+    common = sorted(set(coin_closes.keys()) & set(btc_closes.keys()))
+    if len(common) < SMA_PERIOD + 1:
+        print(f"TREND {symbol}: own={coin_trend} rel=NO_DATA")
+        return None
+
+    ratios = [coin_closes[t] / btc_closes[t] for t in common]
+    ratio_sma = sum(ratios[-SMA_PERIOD:]) / SMA_PERIOD
+    rel_trend = "UP" if ratios[-1] > ratio_sma else "DOWN"
+
+    print(f"TREND {symbol}: own={coin_trend} rel={rel_trend}")
+
+    if coin_trend == rel_trend:
+        return coin_trend
     return None
 
 def check_setup(symbol, interval, trend):
-    try:
-        data = requests.get(f"https://api.kucoin.com/api/v1/market/candles?type={interval}&symbol={symbol}", headers=HEADERS, timeout=15).json()
-    except Exception as e:
-        print(f"SETUP ERROR {symbol} {interval}: {e}")
-        return
-    candles = data.get('data', [])
+    candles = fetch_candles(symbol, interval)
     if not candles or len(candles) < 8:
         return
     candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
@@ -115,18 +143,26 @@ def check_setup(symbol, interval, trend):
 
 def main():
     print("Bot cycle started...")
+
+    btc_closes = get_btc_daily_closes()
+    if btc_closes is None:
+        print("BTC data unavailable, aborting")
+        return
+    print(f"BTC data loaded: {len(btc_closes)} candles")
+
     top = get_top_symbols()
-    if top:
-        print(f"Monitoring {len(top)} coins...")
-        for sym in top:
-            trend = get_daily_trend(sym)
-            if trend:
-                for iv in ENTRY_INTERVALS:
-                    check_setup(sym, iv, trend)
-                    time.sleep(0.3)
-            time.sleep(0.3)
-        print("Cycle done.")
-    else:
-        print("No symbols found.")
+    if not top:
+        print("No symbols found")
+        return
+    print(f"Monitoring {len(top)} coins...")
+
+    for sym in top:
+        trend = get_coin_trend(sym, btc_closes)
+        if trend:
+            for iv in ENTRY_INTERVALS:
+                check_setup(sym, iv, trend)
+                time.sleep(0.1)
+        time.sleep(0.1)
+    print("Cycle done.")
 
 main()
