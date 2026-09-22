@@ -89,16 +89,6 @@ def weex_request(method, path, params=None, body=None):
         return None
 
 
-def weex_set_leverage(symbol, leverage=1):
-    """تنظیم اهرم روی 1x (بدون اهرم)"""
-    body = {
-        "symbol": symbol,
-        "leverage": str(leverage),
-        "marginMode": "isolated"
-    }
-    return weex_request("POST", "/account/setLeverage", body=body)
-
-
 def weex_get_balance():
     return weex_request("GET", "/balance")
 
@@ -109,11 +99,13 @@ def weex_get_positions():
 
 def weex_place_order(symbol, side, size, stop_loss):
     """ثبت سفارش Market با حد ضرر"""
+    client_order_id = f"bot_{int(time.time())}"
     body = {
         "symbol": symbol,
         "side": side,
         "type": "market",
         "size": str(size),
+        "newClientOrderId": client_order_id,  # پارامتر اجباری
         "slTriggerPrice": str(stop_loss)
     }
     return weex_request("POST", "/order", body=body)
@@ -281,11 +273,7 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     # تبدیل نماد: BTC-USDT → BTCUSDT
     weex_symbol = symbol.replace("-", "")
     
-    # تنظیم اهرم 1x
-    lev_resp = weex_set_leverage(weex_symbol, LEVERAGE)
-    print(f"[LEVERAGE SET] {weex_symbol} -> {LEVERAGE}x | {lev_resp}")
-    
-    # ثبت سفارش
+    # ثبت سفارش (بدون تنظیم اهرم، چون اهرم 1x است)
     resp = weex_place_order(weex_symbol, side.upper(), size, stop_loss)
     print(f"[WEEX ORDER] {resp}")
     
