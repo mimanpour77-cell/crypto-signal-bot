@@ -27,12 +27,16 @@ jobs:
         run: pip install requests
 
       - name: Run bot
+        env:
+          LBANK_API_KEY: ${{ secrets.LBANK_API_KEY }}
+          LBANK_SECRET_KEY: ${{ secrets.LBANK_SECRET_KEY }}
+          LBANK_PASSPHRASE: ${{ secrets.LBANK_PASSPHRASE }}
         run: python main.py
 
       - name: Save memory file
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add last_alerts.json
-          git commit -m "Update alerts memory" || echo "No changes"
+          git add last_alerts.json trading_state.json || echo "No files"
+          git commit -m "Update state files" || echo "No changes"
           git push || echo "No push needed"
