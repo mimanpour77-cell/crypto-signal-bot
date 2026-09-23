@@ -8,27 +8,27 @@ import base64
 from datetime import datetime
 
 # ================= تنظیمات =================
-USE_DEMO = True          # چون حساب دمو نداریم، True بذار ولی از حساب اصلی استفاده می‌کنیم
-LEVERAGE = 1
+DRY_RUN = True           # True = فقط لاگ (بدون سفارش واقعی)، بعداً False کن
+LEVERAGE = 1             # بدون اهرم
+MARGIN_MODE = "isolated" # مارجین جداگانه
 
 API_KEY = os.environ.get("LBANK_API_KEY", "")
 SECRET_KEY = os.environ.get("LBANK_SECRET_KEY", "")
 PASSPHRASE = os.environ.get("LBANK_PASSPHRASE", "")
 
-CAPITAL = 5              # 5 دلار
-RISK_PER_TRADE = 0.0025  # 0.25% = 1.25 سنت
-MAX_DAILY_RISK = 0.01    # 1% = 5 سنت
-MAX_CONCURRENT = 1       # فقط 1 پوزیشن (با 5 دلار بیشتر از 1 تا ممکن نیست)
+CAPITAL = 2              # 2 دلار
+RISK_PER_TRADE = 0.0025  # 0.25% = 0.5 سنت
+MAX_DAILY_RISK = 0.01    # 1% = 2 سنت
+MAX_CONCURRENT = 1       # فقط 1 پوزیشن
 
 TREND_INTERVAL = "1day"
 ENTRY_INTERVAL = "4hour"
-TOP_N = 50               # به 50 کم کردیم چون سرمایه کمه
+TOP_N = 50
 TOLERANCE = 0.001
 SMA_PERIOD = 25
 BTC_SYMBOL = "BTC-USDT"
 STATE_FILE = "trading_state.json"
 
-# LBank Futures API
 LBANK_BASE = "https://lbkperp.lbank.com"
 
 STABLECOINS = [
@@ -44,7 +44,6 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # ================= LBank API =================
 def lbank_sign(timestamp, method, path, body=""):
-    """امضای LBank: timestamp + method + path + body با HmacSHA256 و base64"""
     message = f"{timestamp}{method.upper()}{path}{body}"
     signature = hmac.new(
         SECRET_KEY.encode('utf-8'),
@@ -89,46 +88,22 @@ def lbank_request(method, path, params=None, body=None):
 
 
 def lbank_place_order(symbol, side, size, stop_loss):
-    """ثبت سفارش Market با حد ضرر - چند حالت مختلف"""
+    """ثبت سفارش با اهرم 1x و مارجین Isolated"""
     client_id = f"bot{int(time.time() * 1000)}"
     
-    # حالت ۱: پارامترهای استاندارد
-    attempts = [
-        {
-            "symbol": symbol.lower(),
-            "side": side.lower(),
-            "type": "market",
-            "quantity": str(size),
-            "api_key": API_KEY,
-            "client_order_id": client_id,
-            "stop_loss": str(stop_loss)
-        },
-        {
-            "symbol": symbol.lower(),
-            "side": side.lower(),
-            "type": "market",
-            "size": str(size),
-            "api_key": API_KEY,
-            "client_order_id": client_id
-        },
-        {
-            "symbol": symbol,
-            "side": side.upper(),
-            "type": "MARKET",
-            "quantity": str(size),
-            "api_key": API_KEY
-        }
-    ]
-    
-    for i, body in enumerate(attempts, 1):
-        print(f"[TRY {i}] {body}")
-        r = lbank_request("POST", "/v1/order", body=body)
-        print(f"[TRY {i} RESPONSE] {r}")
-        if r and (r.get("result") == "true" or r.get("code") == "0" or r.get("success")):
-            print(f"[SUCCESS] Attempt {i} worked!")
-            return r
-    
-    return None
+    # پارامترها با اهرم 1x و مارجین isolated
+    body = {
+        "symbol": symbol.lower(),
+        "side": side.lower(),
+        "type": "market",
+        "quantity": str(size),
+        "api_key": API_KEY,
+        "client_order_id": client_id,
+        "leverage": str(LEVERAGE),
+        "marginMode": MARGIN_MODE,
+        "stop_loss": str(stop_loss)
+    }
+    return lbank_request("POST", "/v1/order", body=body)
 
 
 def lbank_close_position(symbol):
@@ -146,8 +121,10 @@ def load_state():
             return json.load(f)
     return {
         "open_positions": [],
+        "closed_positions": [],
         "today_date": str(datetime.now().date()),
-        "today_risk_used": 0.0
+        "today_risk_used": 0.0,
+        "total_pnl": 0.0
     }
 
 
@@ -284,49 +261,52 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     daily_limit = CAPITAL * MAX_DAILY_RISK
     
     if state["today_risk_used"] + risk_amount > daily_limit:
-        print(f"[BLOCKED] Risk limit: ${state['today_risk_used']:.4f}/${daily_limit:.4f}")
+        print(f"[BLOCKED] Risk limit reached")
         return False
     
     if len(state["open_positions"]) >= MAX_CONCURRENT:
         print(f"[BLOCKED] Max positions: {MAX_CONCURRENT}")
         return False
     
-    # تبدیل نماد: BTC-USDT → btcusdt
     lbank_symbol = symbol.replace("-", "").lower()
-    
-    resp = lbank_place_order(lbank_symbol, side, size, stop_loss)
-    print(f"[LBANK ORDER] {resp}")
-    
-    if not resp:
-        print(f"[FAILED] Order not placed")
-        return False
-    
     r = abs(entry - stop_loss)
-    if side == "buy":
-        next_tp = entry + r
+    next_tp = entry + r if side == "buy" else entry - r
+    
+    if DRY_RUN:
+        print(f"[DRY RUN] WOULD OPEN {side.upper()} {symbol}")
+        print(f"  Entry: {entry}")
+        print(f"  Stop Loss: {stop_loss}")
+        print(f"  Size: {size:.8f}")
+        print(f"  R: {r:.6f}")
+        print(f"  Next TP: {next_tp:.6f}")
+        print(f"  Risk: ${risk_amount:.6f} ({RISK_PER_TRADE*100}% of capital)")
+        print(f"  Leverage: {LEVERAGE}x | Margin: {MARGIN_MODE}")
+        success = True
     else:
-        next_tp = entry - r
+        resp = lbank_place_order(lbank_symbol, side, size, stop_loss)
+        print(f"[LBANK ORDER] {resp}")
+        success = resp is not None
     
-    position = {
-        "symbol": symbol,
-        "lbank_symbol": lbank_symbol,
-        "side": side,
-        "entry": entry,
-        "original_sl": stop_loss,
-        "current_sl": stop_loss,
-        "size": size,
-        "R": r,
-        "next_tp": next_tp,
-        "tp_count": 0,
-        "risk_amount": risk_amount,
-        "opened_at": str(datetime.now())
-    }
-    state["open_positions"].append(position)
-    state["today_risk_used"] += risk_amount
-    save_state(state)
-    
-    print(f"[OPENED] {side.upper()} {symbol} | Entry: {entry} | SL: {stop_loss} | Size: {size:.6f} | R: {r:.6f}")
-    return True
+    if success:
+        position = {
+            "symbol": symbol,
+            "lbank_symbol": lbank_symbol,
+            "side": side,
+            "entry": entry,
+            "original_sl": stop_loss,
+            "current_sl": stop_loss,
+            "size": size,
+            "R": r,
+            "next_tp": next_tp,
+            "tp_count": 0,
+            "risk_amount": risk_amount,
+            "opened_at": str(datetime.now())
+        }
+        state["open_positions"].append(position)
+        state["today_risk_used"] += risk_amount
+        save_state(state)
+        return True
+    return False
 
 
 def update_positions(state, current_prices):
@@ -341,8 +321,15 @@ def update_positions(state, current_prices):
         
         if side == "buy":
             if price <= pos["current_sl"]:
-                print(f"[STOP HIT] {symbol} @ {pos['current_sl']}")
-                lbank_close_position(pos["lbank_symbol"])
+                pnl = (pos["current_sl"] - pos["entry"]) * pos["size"]
+                print(f"[DRY RUN] STOP HIT: {symbol} @ {pos['current_sl']:.6f}")
+                print(f"  PnL: ${pnl:.6f}")
+                if not DRY_RUN:
+                    lbank_close_position(pos["lbank_symbol"])
+                pos["pnl"] = pnl
+                pos["closed_at"] = str(datetime.now())
+                state["closed_positions"].append(pos)
+                state["total_pnl"] = state.get("total_pnl", 0) + pnl
                 state["open_positions"].remove(pos)
                 save_state(state)
                 continue
@@ -351,14 +338,22 @@ def update_positions(state, current_prices):
                 pos["tp_count"] += 1
                 new_sl = pos["next_tp"]
                 pos["current_sl"] = new_sl
-                print(f"[TP{pos['tp_count']}] {symbol} @ {new_sl:.6f} | SL -> {new_sl:.6f}")
+                print(f"[DRY RUN] TP{pos['tp_count']} HIT: {symbol} @ {new_sl:.6f}")
+                print(f"  SL → {new_sl:.6f}")
                 pos["next_tp"] = new_sl + r
                 save_state(state)
         
         else:
             if price >= pos["current_sl"]:
-                print(f"[STOP HIT] {symbol} @ {pos['current_sl']}")
-                lbank_close_position(pos["lbank_symbol"])
+                pnl = (pos["entry"] - pos["current_sl"]) * pos["size"]
+                print(f"[DRY RUN] STOP HIT: {symbol} @ {pos['current_sl']:.6f}")
+                print(f"  PnL: ${pnl:.6f}")
+                if not DRY_RUN:
+                    lbank_close_position(pos["lbank_symbol"])
+                pos["pnl"] = pnl
+                pos["closed_at"] = str(datetime.now())
+                state["closed_positions"].append(pos)
+                state["total_pnl"] = state.get("total_pnl", 0) + pnl
                 state["open_positions"].remove(pos)
                 save_state(state)
                 continue
@@ -367,7 +362,8 @@ def update_positions(state, current_prices):
                 pos["tp_count"] += 1
                 new_sl = pos["next_tp"]
                 pos["current_sl"] = new_sl
-                print(f"[TP{pos['tp_count']}] {symbol} @ {new_sl:.6f} | SL -> {new_sl:.6f}")
+                print(f"[DRY RUN] TP{pos['tp_count']} HIT: {symbol} @ {new_sl:.6f}")
+                print(f"  SL → {new_sl:.6f}")
                 pos["next_tp"] = new_sl - r
                 save_state(state)
     
@@ -392,11 +388,25 @@ def get_current_prices(symbols):
 
 # ================= اجرای اصلی =================
 def main():
-    print(f"=== Trading Bot Started (LBank) ===")
-    print(f"Capital: ${CAPITAL} | Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.4f} | Daily: ${CAPITAL*MAX_DAILY_RISK:.4f}")
+    mode = "DRY RUN (no real orders)" if DRY_RUN else "LIVE TRADING"
+    print(f"=== Trading Bot Started [{mode}] ===")
+    print(f"Capital: ${CAPITAL}")
+    print(f"Leverage: {LEVERAGE}x | Margin: {MARGIN_MODE}")
+    print(f"Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.6f} ({RISK_PER_TRADE*100}%)")
+    print(f"Daily Limit: ${CAPITAL*MAX_DAILY_RISK:.6f}")
+    print(f"Max Concurrent: {MAX_CONCURRENT}")
     
     state = load_state()
     state = reset_daily_if_needed(state)
+    
+    # نمایش خلاصه
+    total_pnl = state.get("total_pnl", 0)
+    closed_count = len(state.get("closed_positions", []))
+    print(f"\n--- Account Summary ---")
+    print(f"Total PnL: ${total_pnl:.6f}")
+    print(f"Closed Positions: {closed_count}")
+    print(f"Open Positions: {len(state['open_positions'])}")
+    print(f"Today Risk Used: ${state['today_risk_used']:.6f}")
     
     if state["open_positions"]:
         print(f"\n--- Updating {len(state['open_positions'])} open positions ---")
@@ -420,7 +430,7 @@ def main():
         
         setup = check_setup(sym, trend)
         if setup:
-            print(f"[SETUP FOUND] {sym} | {setup['side'].upper()} | Entry: {setup['entry']} | SL: {setup['sl']}")
+            print(f"\n[SETUP FOUND] {sym} | {setup['side'].upper()}")
             size = calculate_position_size(setup["entry"], setup["sl"])
             if size > 0:
                 open_position(state, sym, setup["side"], setup["entry"], setup["sl"], size)
