@@ -1,20 +1,5 @@
 {
-  "open_positions": [
-    {
-      "symbol": "INJ-USDT",
-      "lbank_symbol": "injusdt",
-      "side": "buy",
-      "entry": 8.009,
-      "original_sl": 7.87,
-      "current_sl": 8.148,
-      "size": 0.03597122302158268,
-      "R": 0.13900000000000023,
-      "next_tp": 8.286999999999999,
-      "tp_count": 1,
-      "risk_amount": 0.005,
-      "opened_at": "2026-09-23 11:08:41.791147"
-    }
-  ],
+  "open_positions": [],
   "closed_positions": [
     {
       "symbol": "INJ-USDT",
@@ -31,9 +16,25 @@
       "opened_at": "2026-09-23 10:12:48.899934",
       "pnl": 0.004999999999999969,
       "closed_at": "2026-09-23 11:08:21.375529"
+    },
+    {
+      "symbol": "INJ-USDT",
+      "lbank_symbol": "injusdt",
+      "side": "buy",
+      "entry": 8.009,
+      "original_sl": 7.87,
+      "current_sl": 8.148,
+      "size": 0.03597122302158268,
+      "R": 0.13900000000000023,
+      "next_tp": 8.286999999999999,
+      "tp_count": 1,
+      "risk_amount": 0.005,
+      "opened_at": "2026-09-23 11:08:41.791147",
+      "pnl": 0.004999999999999969,
+      "closed_at": "2026-09-23 13:42:06.964375"
     }
   ],
   "today_date": "2026-09-23",
   "today_risk_used": 0.01,
-  "total_pnl": 0.004999999999999969
+  "total_pnl": 0.009999999999999938
 }
