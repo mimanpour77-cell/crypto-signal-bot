@@ -44,6 +44,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # ================= LBank API =================
 def lbank_sign(timestamp, method, path, body=""):
+    """امضای LBank: timestamp + method + path + body با HmacSHA256 و base64"""
     message = f"{timestamp}{method.upper()}{path}{body}"
     signature = hmac.new(
         SECRET_KEY.encode('utf-8'),
@@ -91,7 +92,6 @@ def lbank_place_order(symbol, side, size, stop_loss):
     """ثبت سفارش با اهرم 1x و مارجین Isolated"""
     client_id = f"bot{int(time.time() * 1000)}"
     
-    # پارامترها با اهرم 1x و مارجین isolated
     body = {
         "symbol": symbol.lower(),
         "side": side.lower(),
@@ -112,6 +112,45 @@ def lbank_close_position(symbol):
         "api_key": API_KEY
     }
     return lbank_request("POST", "/v1/position/close", body=body)
+
+
+# ================= تست API =================
+def test_lbank_api():
+    """تست اتصال به LBank - فقط چک موجودی، بدون سفارش"""
+    print("\n" + "="*50)
+    print("=== LBANK API CONNECTION TEST ===")
+    print("="*50)
+    print(f"API Key exists: {bool(API_KEY)}")
+    print(f"Secret Key exists: {bool(SECRET_KEY)}")
+    print(f"Passphrase exists: {bool(PASSPHRASE)}")
+    
+    if not API_KEY or not SECRET_KEY:
+        print("[SKIP] API credentials missing")
+        return
+    
+    # اندپوینت‌های احتمالی برای چک موجودی
+    endpoints = [
+        "/v1/account/balance",
+        "/v1/asset/balance",
+        "/v1/position/balance",
+        "/v1/account/info",
+        "/v2/account/balance",
+        "/v1/account/assets",
+    ]
+    
+    for endpoint in endpoints:
+        print(f"\n[TRY] {endpoint}")
+        try:
+            r = lbank_request("GET", endpoint)
+            print(f"[RESPONSE] {r}")
+            if r and (r.get("result") == "true" or r.get("code") == "0" or r.get("data")):
+                print(f"[SUCCESS] API works with {endpoint}")
+                return r
+        except Exception as e:
+            print(f"[ERROR] {e}")
+    
+    print("\n[FAILED] None of the balance endpoints worked")
+    return None
 
 
 # ================= حافظه =================
@@ -439,4 +478,8 @@ def main():
     print("\n=== Cycle complete ===")
 
 
+# اجرای تست API اول
+test_lbank_api()
+
+# بعدش اجرای اصلی
 main()
