@@ -4,33 +4,32 @@ import json
 import os
 import hmac
 import hashlib
+import base64
 from datetime import datetime
 
 # ================= تنظیمات =================
-USE_DEMO = True          # True = دمو، False = واقعی
-LEVERAGE = 1             # بدون اهرم
+USE_DEMO = True          # چون حساب دمو نداریم، True بذار ولی از حساب اصلی استفاده می‌کنیم
+LEVERAGE = 1
 
-API_KEY = os.environ.get("WEEX_API_KEY", "")
-SECRET_KEY = os.environ.get("WEEX_SECRET_KEY", "")
-PASSPHRASE = os.environ.get("WEEX_PASSPHRASE", "")
+API_KEY = os.environ.get("LBANK_API_KEY", "")
+SECRET_KEY = os.environ.get("LBANK_SECRET_KEY", "")
+PASSPHRASE = os.environ.get("LBANK_PASSPHRASE", "")
 
-CAPITAL = 100            # سرمایه کل: 100 دلار
-RISK_PER_TRADE = 0.0025  # 0.25% از سرمایه در هر معامله
-MAX_DAILY_RISK = 0.01    # 1% حداکثر ریسک روزانه
-MAX_CONCURRENT = 4       # حداکثر 4 پوزیشن همزمان
+CAPITAL = 5              # 5 دلار
+RISK_PER_TRADE = 0.0025  # 0.25% = 1.25 سنت
+MAX_DAILY_RISK = 0.01    # 1% = 5 سنت
+MAX_CONCURRENT = 1       # فقط 1 پوزیشن (با 5 دلار بیشتر از 1 تا ممکن نیست)
 
 TREND_INTERVAL = "1day"
 ENTRY_INTERVAL = "4hour"
-TOP_N = 100
+TOP_N = 50               # به 50 کم کردیم چون سرمایه کمه
 TOLERANCE = 0.001
 SMA_PERIOD = 25
 BTC_SYMBOL = "BTC-USDT"
 STATE_FILE = "trading_state.json"
 
-if USE_DEMO:
-    WEEX_BASE = "https://api-contract.weex.com/capi/v3/sim"
-else:
-    WEEX_BASE = "https://api-contract.weex.com/capi/v3"
+# LBank Futures API
+LBANK_BASE = "https://lbkperp.lbank.com"
 
 STABLECOINS = [
     'USDC','FDUSD','TUSD','BUSD','DAI','USDP','EUR','GBP','USD1','USDE',
@@ -43,20 +42,21 @@ STABLECOINS = [
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
-# ================= WEEX API =================
-def weex_sign(timestamp, method, request_path, body=""):
-    message = f"{timestamp}{method}{request_path}{body}"
+# ================= LBank API =================
+def lbank_sign(timestamp, method, path, body=""):
+    """امضای LBank: timestamp + method + path + body با HmacSHA256 و base64"""
+    message = f"{timestamp}{method.upper()}{path}{body}"
     signature = hmac.new(
         SECRET_KEY.encode('utf-8'),
         message.encode('utf-8'),
         hashlib.sha256
-    ).hexdigest()
-    return signature
+    ).digest()
+    return base64.b64encode(signature).decode('utf-8')
 
 
-def weex_request(method, path, params=None, body=None):
+def lbank_request(method, path, params=None, body=None):
     timestamp = str(int(time.time() * 1000))
-    body_str = json.dumps(body) if body else ""
+    body_str = json.dumps(body, separators=(',', ':')) if body else ""
     
     if params:
         query = "&".join([f"{k}={v}" for k, v in params.items()])
@@ -64,56 +64,79 @@ def weex_request(method, path, params=None, body=None):
     else:
         full_path = path
     
-    signature = weex_sign(timestamp, method.upper(), full_path, body_str)
+    signature = lbank_sign(timestamp, method, full_path, body_str)
     
     headers = {
-        "ACCESS-KEY": API_KEY,
-        "ACCESS-SIGN": signature,
-        "ACCESS-TIMESTAMP": timestamp,
-        "ACCESS-PASSPHRASE": PASSPHRASE,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "timestamp": timestamp,
+        "signature_method": "HmacSHA256",
+        "sign": signature
     }
     
-    url = f"{WEEX_BASE}{full_path}"
+    url = f"{LBANK_BASE}{full_path}"
     
     try:
         if method.upper() == "GET":
-            r = requests.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, params=params, timeout=15)
         elif method.upper() == "POST":
             r = requests.post(url, headers=headers, data=body_str, timeout=15)
         else:
             return None
         return r.json()
     except Exception as e:
-        print(f"WEEX ERROR: {e}")
+        print(f"LBANK ERROR: {e}")
         return None
 
 
-def weex_get_balance():
-    return weex_request("GET", "/balance")
+def lbank_place_order(symbol, side, size, stop_loss):
+    """ثبت سفارش Market با حد ضرر - چند حالت مختلف"""
+    client_id = f"bot{int(time.time() * 1000)}"
+    
+    # حالت ۱: پارامترهای استاندارد
+    attempts = [
+        {
+            "symbol": symbol.lower(),
+            "side": side.lower(),
+            "type": "market",
+            "quantity": str(size),
+            "api_key": API_KEY,
+            "client_order_id": client_id,
+            "stop_loss": str(stop_loss)
+        },
+        {
+            "symbol": symbol.lower(),
+            "side": side.lower(),
+            "type": "market",
+            "size": str(size),
+            "api_key": API_KEY,
+            "client_order_id": client_id
+        },
+        {
+            "symbol": symbol,
+            "side": side.upper(),
+            "type": "MARKET",
+            "quantity": str(size),
+            "api_key": API_KEY
+        }
+    ]
+    
+    for i, body in enumerate(attempts, 1):
+        print(f"[TRY {i}] {body}")
+        r = lbank_request("POST", "/v1/order", body=body)
+        print(f"[TRY {i} RESPONSE] {r}")
+        if r and (r.get("result") == "true" or r.get("code") == "0" or r.get("success")):
+            print(f"[SUCCESS] Attempt {i} worked!")
+            return r
+    
+    return None
 
 
-def weex_get_positions():
-    return weex_request("GET", "/position/allPosition")
-
-
-def weex_place_order(symbol, side, size, stop_loss):
-    """ثبت سفارش Market با حد ضرر"""
-    client_order_id = f"bot_{int(time.time())}"
+def lbank_close_position(symbol):
     body = {
-        "symbol": symbol,
-        "side": side,
-        "type": "market",
-        "size": str(size),
-        "newClientOrderId": client_order_id,  # پارامتر اجباری
-        "slTriggerPrice": str(stop_loss)
+        "symbol": symbol.lower(),
+        "api_key": API_KEY
     }
-    return weex_request("POST", "/order", body=body)
-
-
-def weex_close_position(symbol):
-    body = {"symbol": symbol}
-    return weex_request("POST", "/closePosition", body=body)
+    return lbank_request("POST", "/v1/position/close", body=body)
 
 
 # ================= حافظه =================
@@ -245,13 +268,11 @@ def check_setup(symbol, trend):
 
 # ================= مدیریت پوزیشن =================
 def calculate_position_size(entry, stop_loss):
-    """محاسبه حجم با در نظر گرفتن اهرم"""
     risk_amount = CAPITAL * RISK_PER_TRADE
     stop_distance = abs(entry - stop_loss)
     if stop_distance == 0:
         return 0
     size = risk_amount / stop_distance
-    # اگه بدون اهرم باشیم، حجم رو بر اساس موجودی محدود می‌کنیم
     if LEVERAGE == 1:
         max_size = CAPITAL / entry
         size = min(size, max_size)
@@ -263,25 +284,23 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     daily_limit = CAPITAL * MAX_DAILY_RISK
     
     if state["today_risk_used"] + risk_amount > daily_limit:
-        print(f"[BLOCKED] Risk limit: ${state['today_risk_used']:.2f}/${daily_limit:.2f}")
+        print(f"[BLOCKED] Risk limit: ${state['today_risk_used']:.4f}/${daily_limit:.4f}")
         return False
     
     if len(state["open_positions"]) >= MAX_CONCURRENT:
         print(f"[BLOCKED] Max positions: {MAX_CONCURRENT}")
         return False
     
-    # تبدیل نماد: BTC-USDT → BTCUSDT
-    weex_symbol = symbol.replace("-", "")
+    # تبدیل نماد: BTC-USDT → btcusdt
+    lbank_symbol = symbol.replace("-", "").lower()
     
-    # ثبت سفارش (بدون تنظیم اهرم، چون اهرم 1x است)
-    resp = weex_place_order(weex_symbol, side.upper(), size, stop_loss)
-    print(f"[WEEX ORDER] {resp}")
+    resp = lbank_place_order(lbank_symbol, side, size, stop_loss)
+    print(f"[LBANK ORDER] {resp}")
     
-    if not resp or resp.get("code") != "00000":
-        print(f"[FAILED] Order not placed: {resp}")
+    if not resp:
+        print(f"[FAILED] Order not placed")
         return False
     
-    # ذخیره پوزیشن
     r = abs(entry - stop_loss)
     if side == "buy":
         next_tp = entry + r
@@ -290,7 +309,7 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     
     position = {
         "symbol": symbol,
-        "weex_symbol": weex_symbol,
+        "lbank_symbol": lbank_symbol,
         "side": side,
         "entry": entry,
         "original_sl": stop_loss,
@@ -306,7 +325,7 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     state["today_risk_used"] += risk_amount
     save_state(state)
     
-    print(f"[OPENED] {side.upper()} {symbol} | Entry: {entry} | SL: {stop_loss} | Size: {size:.6f} | R: {r:.4f}")
+    print(f"[OPENED] {side.upper()} {symbol} | Entry: {entry} | SL: {stop_loss} | Size: {size:.6f} | R: {r:.6f}")
     return True
 
 
@@ -323,7 +342,7 @@ def update_positions(state, current_prices):
         if side == "buy":
             if price <= pos["current_sl"]:
                 print(f"[STOP HIT] {symbol} @ {pos['current_sl']}")
-                weex_close_position(pos["weex_symbol"])
+                lbank_close_position(pos["lbank_symbol"])
                 state["open_positions"].remove(pos)
                 save_state(state)
                 continue
@@ -332,14 +351,14 @@ def update_positions(state, current_prices):
                 pos["tp_count"] += 1
                 new_sl = pos["next_tp"]
                 pos["current_sl"] = new_sl
-                print(f"[TP{pos['tp_count']}] {symbol} @ {new_sl:.4f} | SL -> {new_sl:.4f}")
+                print(f"[TP{pos['tp_count']}] {symbol} @ {new_sl:.6f} | SL -> {new_sl:.6f}")
                 pos["next_tp"] = new_sl + r
                 save_state(state)
         
         else:
             if price >= pos["current_sl"]:
                 print(f"[STOP HIT] {symbol} @ {pos['current_sl']}")
-                weex_close_position(pos["weex_symbol"])
+                lbank_close_position(pos["lbank_symbol"])
                 state["open_positions"].remove(pos)
                 save_state(state)
                 continue
@@ -348,7 +367,7 @@ def update_positions(state, current_prices):
                 pos["tp_count"] += 1
                 new_sl = pos["next_tp"]
                 pos["current_sl"] = new_sl
-                print(f"[TP{pos['tp_count']}] {symbol} @ {new_sl:.4f} | SL -> {new_sl:.4f}")
+                print(f"[TP{pos['tp_count']}] {symbol} @ {new_sl:.6f} | SL -> {new_sl:.6f}")
                 pos["next_tp"] = new_sl - r
                 save_state(state)
     
@@ -373,8 +392,8 @@ def get_current_prices(symbols):
 
 # ================= اجرای اصلی =================
 def main():
-    print(f"=== Trading Bot Started (Demo: {USE_DEMO}, Leverage: {LEVERAGE}x) ===")
-    print(f"Capital: ${CAPITAL} | Risk/Trade: ${CAPITAL*RISK_PER_TRADE} | Daily Limit: ${CAPITAL*MAX_DAILY_RISK}")
+    print(f"=== Trading Bot Started (LBank) ===")
+    print(f"Capital: ${CAPITAL} | Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.4f} | Daily: ${CAPITAL*MAX_DAILY_RISK:.4f}")
     
     state = load_state()
     state = reset_daily_if_needed(state)
