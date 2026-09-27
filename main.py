@@ -14,18 +14,16 @@ from web3 import Web3
 # ================= تنظیمات =================
 DRY_RUN = True
 
-# کلید کیف پول
 BSC_PRIVATE_KEY = os.environ.get("BSC_PRIVATE_KEY", "")
 WALLET_ADDRESS = "0x54FF9b635C081b81631220ca1d4B0894F5faA9eC"
 
-# تلگرام
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 CAPITAL = 2
-RISK_PER_TRADE = 0.0025    # 0.25% هر معامله
-MAX_DAILY_RISK = 0.01      # 1% سقف روزانه
-MAX_CONCURRENT = 4         # حداکثر 4 پوزیشن همزمان
+RISK_PER_TRADE = 0.0025
+MAX_DAILY_RISK = 0.01
+MAX_CONCURRENT = 4
 
 TREND_INTERVAL = "1day"
 ENTRY_INTERVAL = "4hour"
@@ -36,7 +34,6 @@ SMA_PERIOD = 25
 BTC_SYMBOL = "BTC-USDT"
 STATE_FILE = "trading_state.json"
 
-# ================= BSC / PancakeSwap =================
 BSC_RPC = "https://bsc-dataseed.binance.org/"
 PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E"
 USDT_BSC = "0x55d398326f99059fF775485246999027B3197955"
@@ -75,22 +72,20 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 w3 = Web3(Web3.HTTPProvider(BSC_RPC))
 
 
-# ================= تلگرام =================
 def send_telegram(msg):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        url = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage"
         requests.post(url, json={
             "chat_id": TELEGRAM_CHAT_ID,
             "text": msg,
             "parse_mode": "HTML"
         }, timeout=10)
     except Exception as e:
-        print(f"TELEGRAM ERROR: {e}")
+        print("TELEGRAM ERROR: " + str(e))
 
 
-# ================= PancakeSwap =================
 def get_token_decimals(token_address):
     try:
         c = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
@@ -106,17 +101,15 @@ def get_token_balance(token_address):
         dec = c.functions.decimals().call()
         return bal / (10 ** dec)
     except Exception as e:
-        print(f"BALANCE ERROR: {e}")
+        print("BALANCE ERROR: " + str(e))
         return 0
 
 
 def get_usdt_balance():
-    """موجودی USDT کیف پول"""
     return get_token_balance(USDT_BSC)
 
 
 def get_bnb_balance():
-    """موجودی BNB برای گس"""
     try:
         bal = w3.eth.get_balance(Web3.to_checksum_address(WALLET_ADDRESS))
         return bal / (10 ** 18)
@@ -176,7 +169,6 @@ def pancake_swap(token_address, amount_in_wei, is_buy):
     return w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
 
 
-# ================= حافظه =================
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r') as f:
@@ -203,12 +195,11 @@ def reset_daily_if_needed(state):
         state["today_date"] = today
         state["today_risk_used"] = 0.0
         state["today_stops"] = 0
-        print(f"[RESET] New day: {today}")
+        print("[RESET] New day: " + today)
     return state
 
 
 def is_blocked(state):
-    """چک کن آیا امروز بلاک شده"""
     blocked_until = state.get("blocked_until", "")
     if not blocked_until:
         return False
@@ -216,37 +207,29 @@ def is_blocked(state):
     blocked_date = datetime.strptime(blocked_until, "%Y-%m-%d").date()
     if today <= blocked_date:
         return True
-    # unblock
     state["blocked_until"] = ""
     save_state(state)
     return False
 
 
 def block_for_tomorrow(state):
-    """بلاک کردن امروز و فردا"""
     today = datetime.now().date()
     tomorrow = today + timedelta(days=1)
     state["blocked_until"] = str(tomorrow)
     save_state(state)
-    print(f"[BLOCKED] Trading paused until {tomorrow}")
-    send_telegram(
-        f"🚨 <b>توقف معاملات</b>\n\n"
-        f"۴ استاپ در یک روز خورد!\n"
-        f"معاملات تا {tomorrow} متوقف شد.\n"
-        f"سرمایه باقی‌مانده: ${CAPITAL:.2f}"
-    )
+    print("[BLOCKED] Trading paused until " + str(tomorrow))
+    send_telegram("🚨 <b>توقف معاملات</b>\n\n۴ استاپ در یک روز خورد!\nمعاملات تا " + str(tomorrow) + " متوقف شد.")
 
 
-# ================= KuCoin =================
 def fetch_candles(symbol, interval):
     try:
         data = requests.get(
-            f"https://api.kucoin.com/api/v1/market/candles?type={interval}&symbol={symbol}",
+            "https://api.kucoin.com/api/v1/market/candles?type=" + interval + "&symbol=" + symbol,
             headers=HEADERS, timeout=15
         ).json()
         return data.get('data', [])
     except Exception as e:
-        print(f"CANDLES ERROR {symbol}: {e}")
+        print("CANDLES ERROR " + symbol + ": " + str(e))
         return []
 
 
@@ -257,7 +240,7 @@ def get_top_symbols():
             headers=HEADERS, timeout=15
         ).json()
     except Exception as e:
-        print(f"SYMBOLS ERROR: {e}")
+        print("SYMBOLS ERROR: " + str(e))
         return []
     pairs = []
     for t in data.get('data', {}).get('ticker', []):
@@ -326,70 +309,56 @@ def check_setup(symbol, trend, interval=None):
     return None
 
 
-# ================= مدیریت پوزیشن =================
 def calculate_position_size(entry, stop_loss, available_usdt):
-    """محاسبه حجم با در نظر گرفتن موجودی"""
     risk_amount = CAPITAL * RISK_PER_TRADE
     stop_distance = abs(entry - stop_loss)
     if stop_distance == 0:
         return 0
     size = risk_amount / stop_distance
-    # محدودیت: کل سرمایه تقسیم بر تعداد پوزیشن‌ها
-    max_size_per_pos = CAPITAL / MAX_CONCURRENT / entry
+    max_size_per_pos = (CAPITAL / MAX_CONCURRENT) / entry
     size = min(size, max_size_per_pos)
-    # محدودیت: موجودی واقعی USDT
     if available_usdt > 0:
-        max_size_balance = (available_usdt * 0.95) / entry  # 5% ذخیره
+        max_size_balance = (available_usdt * 0.95) / entry
         size = min(size, max_size_balance)
     return size
 
 
-def open_position(state, symbol, side, entry, stop_loss, size, timeframe="4h"):
+def open_position(state, symbol, side, entry, stop_loss, size, timeframe):
     if side != "buy":
         return False
-
-    # چک بلاک
     if is_blocked(state):
         return False
-
     risk_amount = abs(entry - stop_loss) * size
     daily_limit = CAPITAL * MAX_DAILY_RISK
     if state["today_risk_used"] + risk_amount > daily_limit:
-        print(f"[BLOCKED] Daily risk limit reached")
+        print("[BLOCKED] Daily risk limit reached")
         return False
     if len(state["open_positions"]) >= MAX_CONCURRENT:
-        print(f"[BLOCKED] Max positions: {MAX_CONCURRENT}")
+        print("[BLOCKED] Max positions: " + str(MAX_CONCURRENT))
         return False
-
     token_address = TOKEN_ADDRESSES.get(symbol)
     if not token_address:
         return False
-
     usdt_amount = size * entry
     if usdt_amount < 0.10:
-        print(f"[SKIP] Too small: ${usdt_amount:.4f}")
+        print("[SKIP] Too small: $" + str(usdt_amount))
         return False
-
     r = abs(entry - stop_loss)
     next_tp = entry + r
-
+    success = False
     if DRY_RUN:
-        print(f"[DRY RUN] WOULD BUY {symbol} [{timeframe}] @ {entry} | ${usdt_amount:.4f}")
+        print("[DRY RUN] WOULD BUY " + symbol + " [" + timeframe + "] @ " + str(entry))
         success = True
     else:
         try:
             usdt_wei = int(usdt_amount * (10 ** 18))
             approve_token(USDT_BSC, usdt_wei)
-            receipt = pancake_swap(token_address, usdt_wei, is_buy=True)
+            receipt = pancake_swap(token_address, usdt_wei, True)
             if receipt and receipt.status == 1:
-                print(f"[BUY OK] TX: {receipt.transactionHash.hex()}")
+                print("[BUY OK] TX: " + receipt.transactionHash.hex())
                 success = True
-            else:
-                success = False
         except Exception as e:
-            print(f"[BUY ERROR] {e}")
-            success = False
-
+            print("[BUY ERROR] " + str(e))
     if success:
         position = {
             "symbol": symbol,
@@ -413,10 +382,9 @@ def open_position(state, symbol, side, entry, stop_loss, size, timeframe="4h"):
     return False
 
 
-def close_position(state, pos, current_price, reason="stop"):
+def close_position(state, pos, current_price, reason):
     symbol = pos["symbol"]
     token_address = pos["token_address"]
-
     if DRY_RUN:
         pnl = (current_price - pos["entry"]) * pos["size"]
     else:
@@ -425,28 +393,23 @@ def close_position(state, pos, current_price, reason="stop"):
             if bal > 0:
                 dec = get_token_decimals(token_address)
                 bal_wei = int(bal * (10 ** dec))
-                receipt = pancake_swap(token_address, bal_wei, is_buy=False)
+                receipt = pancake_swap(token_address, bal_wei, False)
                 if receipt and receipt.status == 1:
-                    print(f"[SELL OK] TX: {receipt.transactionHash.hex()}")
+                    print("[SELL OK] TX: " + receipt.transactionHash.hex())
         except Exception as e:
-            print(f"[SELL ERROR] {e}")
+            print("[SELL ERROR] " + str(e))
         pnl = (current_price - pos["entry"]) * pos["size"]
-
     pos["pnl"] = pnl
     pos["closed_at"] = str(datetime.now())
     pos["close_reason"] = reason
     state["closed_positions"].append(pos)
     state["total_pnl"] = state.get("total_pnl", 0) + pnl
     state["open_positions"].remove(pos)
-
-    # اگه استاپ خورد، شمارنده رو زیاد کن
     if reason == "stop":
         state["today_stops"] = state.get("today_stops", 0) + 1
-        print(f"[STOP #{state['today_stops']}] {symbol} | PnL: ${pnl:.6f}")
-        # اگه به سقف روزانه رسید، بلاک کن
+        print("[STOP #" + str(state["today_stops"]) + "] " + symbol + " | PnL: $" + str(pnl))
         if state["today_risk_used"] >= CAPITAL * MAX_DAILY_RISK:
             block_for_tomorrow(state)
-
     save_state(state)
 
 
@@ -457,18 +420,16 @@ def update_positions(state, current_prices):
             continue
         price = current_prices[symbol]
         r = pos["R"]
-
         if price <= pos["current_sl"]:
-            print(f"[STOP HIT] {symbol} @ {pos['current_sl']:.6f}")
-            close_position(state, pos, pos["current_sl"], reason="stop")
+            print("[STOP HIT] " + symbol + " @ " + str(pos["current_sl"]))
+            close_position(state, pos, pos["current_sl"], "stop")
             continue
-
         while price >= pos["next_tp"]:
             pos["tp_count"] += 1
             new_sl = pos["next_tp"]
             pos["current_sl"] = new_sl
             pos["next_tp"] = new_sl + r
-            print(f"[TP{pos['tp_count']}] {symbol} | SL → {new_sl:.6f}")
+            print("[TP" + str(pos["tp_count"]) + "] " + symbol + " | SL -> " + str(new_sl))
             save_state(state)
 
 
@@ -477,7 +438,7 @@ def get_current_prices(symbols):
     for sym in symbols:
         try:
             data = requests.get(
-                f"https://api.kucoin.com/api/v1/market/orderbook/level1?symbol={sym}",
+                "https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=" + sym,
                 headers=HEADERS, timeout=10
             ).json()
             price = data.get('data', {}).get('price')
@@ -488,20 +449,15 @@ def get_current_prices(symbols):
     return prices
 
 
-# ================= گزارش تلگرام =================
 def send_positions_report(state, current_prices):
-    """خلاصه پوزیشن‌ها رو به تلگرام بفرست"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
-
-    msg = f"📊 <b>گزارش ربات</b>\n"
-    msg += f"━━━━━━━━━━━━━━\n"
-
+    msg = "📊 <b>گزارش ربات</b>\n"
+    msg += "━━━━━━━━━━━━━━\n"
     open_pos = state["open_positions"]
     total_unrealized = 0.0
-
     if open_pos:
-        msg += f"<b>🟢 پوزیشن‌های باز ({len(open_pos)}):</b>\n"
+        msg += "<b>🟢 پوزیشن‌های باز (" + str(len(open_pos)) + "):</b>\n"
         for p in open_pos:
             sym = p["symbol"]
             entry = p["entry"]
@@ -511,44 +467,59 @@ def send_positions_report(state, current_prices):
             total_unrealized += pnl
             emoji = "🟢" if pnl >= 0 else "🔴"
             tf = p.get("timeframe", "?")
-            msg += (
-                f"\n{emoji} <b>{sym}</b> [{tf}]\n"
-                f"  ورود: ${entry:.4f}\n"
-                f"  فعلی: ${price:.4f}\n"
-                f"  سود: {'+' if pnl >= 0 else ''}${pnl:.4f} ({pnl_pct:+.2f}%)\n"
-                f"  استاپ: ${p['current_sl']:.4f}\n"
-                f"  هدف بعدی: ${p['next_tp']:.4f}\n"
-            )
+            msg += "\n" + emoji + " <b>" + sym + "</b> [" + tf + "]\n"
+            msg += "  ورود: $" + str(round(entry, 4)) + "\n"
+            msg += "  فعلی: $" + str(round(price, 4)) + "\n"
+            msg += "  سود: " + ("+" if pnl >= 0 else "") + "$" + str(round(pnl, 4)) + "\n"
+            msg += "  استاپ: $" + str(round(p["current_sl"], 4)) + "\n"
+            msg += "  هدف بعدی: $" + str(round(p["next_tp"], 4)) + "\n"
     else:
         msg += "<b>هیچ پوزیشن بازی نیست</b>\n"
-
-    msg += f"\n━━━━━━━━━━━━━━\n"
-    msg += f"💰 <b>موجودی و آمار:</b>\n"
-
+    msg += "\n━━━━━━━━━━━━━━\n"
+    msg += "💰 <b>موجودی و آمار:</b>\n"
     if not DRY_RUN:
         try:
             usdt_bal = get_usdt_balance()
             bnb_bal = get_bnb_balance()
-            msg += f"  USDT: ${usdt_bal:.4f}\n"
-            msg += f"  BNB (گس): {bnb_bal:.6f}\n"
+            msg += "  USDT: $" + str(round(usdt_bal, 4)) + "\n"
+            msg += "  BNB (گس): " + str(round(bnb_bal, 6)) + "\n"
         except:
             pass
-
-    msg += f"  سود باز: {'+' if total_unrealized >= 0 else ''}${total_unrealized:.4f}\n"
-    msg += f"  سود کل بسته‌شده: ${state.get('total_pnl', 0):.4f}\n"
-    msg += f"  ریسک امروز: ${state['today_risk_used']:.4f} / ${CAPITAL*MAX_DAILY_RISK:.4f}\n"
-    msg += f"  استاپ امروز: {state.get('today_stops', 0)}/{MAX_CONCURRENT}\n"
-
+    msg += "  سود باز: " + ("+" if total_unrealized >= 0 else "") + "$" + str(round(total_unrealized, 4)) + "\n"
+    msg += "  سود کل بسته‌شده: $" + str(round(state.get('total_pnl', 0), 4)) + "\n"
+    msg += "  ریسک امروز: $" + str(round(state['today_risk_used'], 4)) + " / $" + str(round(CAPITAL*MAX_DAILY_RISK, 4)) + "\n"
+    msg += "  استاپ امروز: " + str(state.get('today_stops', 0)) + "/" + str(MAX_CONCURRENT) + "\n"
     if state.get("blocked_until"):
-        msg += f"\n🚫 <b>معاملات متوقف تا: {state['blocked_until']}</b>\n"
-
+        msg += "\n🚫 <b>معاملات متوقف تا: " + state["blocked_until"] + "</b>\n"
     send_telegram(msg)
 
 
-# ================= اجرای اصلی =================
 def main():
     mode = "DRY RUN" if DRY_RUN else "LIVE"
-    print(f"=== PancakeSwap Bot [{mode}] ===")
-    print(f"Capital: ${CAPITAL} | Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.6f}")
-    print(f"Wallet: {WALLET_ADDRESS}")
-    print(f"Timeframes: 1h + 4h 
+    print("=== PancakeSwap Bot [" + mode + "] ===")
+    print("Capital: $" + str(CAPITAL))
+    print("Wallet: " + WALLET_ADDRESS)
+    print("Timeframes: 1h + 4h | Max positions: " + str(MAX_CONCURRENT))
+
+    state = load_state()
+    state = reset_daily_if_needed(state)
+
+    usdt_balance = 0
+    if not DRY_RUN:
+        try:
+            usdt_balance = get_usdt_balance()
+            bnb_balance = get_bnb_balance()
+            print("Wallet USDT: $" + str(round(usdt_balance, 4)))
+            print("Wallet BNB: " + str(round(bnb_balance, 6)))
+            if bnb_balance < 0.0005:
+                send_telegram("⚠️ <b>هشدار:</b> موجودی BNB برای گس کمه!")
+        except Exception as e:
+            print("Balance check error: " + str(e))
+
+    if is_blocked(state):
+        print("[BLOCKED] Trading paused until " + state['blocked_until'])
+        send_positions_report(state, {})
+        return
+
+    print("Total PnL: $" + str(round(state.get('total_pnl', 0), 6)))
+    print("Open: " + str(
