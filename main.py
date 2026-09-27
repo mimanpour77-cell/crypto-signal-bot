@@ -507,8 +507,5 @@ def main():
         update_positions(state, current_prices)
     print("--- Scanning ---")
     btc_closes = get_btc_daily_closes()
-        pass
-
-
 if __name__ == "__main__":
     main()
