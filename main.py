@@ -1,6 +1,6 @@
 """
 ربات معامله‌گر خودکار PancakeSwap (Spot)
-استراتژی: SMA7 (بدون تغییر)
+استراتژی: SMA7 روی تایم‌فریم 1 ساعته و 4 ساعته
 شبکه: BNB Chain (BEP20)
 """
 
@@ -30,6 +30,7 @@ MAX_CONCURRENT = 1
 
 TREND_INTERVAL = "1day"
 ENTRY_INTERVAL = "4hour"
+ENTRY_INTERVAL_1H = "1hour"
 TOP_N = 50
 TOLERANCE = 0.001
 SMA_PERIOD = 25
@@ -54,7 +55,6 @@ ERC20_ABI = [
     {"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
 ]
 
-# آدرس توکن‌های BEP20 روی PancakeSwap
 TOKEN_ADDRESSES = {
     "BNB-USDT": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
     "ETH-USDT": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
@@ -74,7 +74,6 @@ TOKEN_ADDRESSES = {
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# اتصال Web3
 w3 = Web3(Web3.HTTPProvider(BSC_RPC))
 
 
@@ -141,7 +140,6 @@ def approve_token(token_address, amount_wei):
 
 
 def pancake_swap(token_address, amount_in_wei, is_buy):
-    """خرید: USDT -> Token | فروش: Token -> USDT"""
     if is_buy:
         path = [Web3.to_checksum_address(USDT_BSC), Web3.to_checksum_address(token_address)]
     else:
@@ -270,9 +268,11 @@ def get_coin_trend(symbol, btc_closes):
     return None
 
 
-def check_setup(symbol, trend):
-    """استراتژی SMA7 (بدون تغییر)"""
-    candles = fetch_candles(symbol, ENTRY_INTERVAL)
+def check_setup(symbol, trend, interval=None):
+    """استراتژی SMA7 (بدون تغییر) - پارامتری برای تایم‌فریم"""
+    if interval is None:
+        interval = ENTRY_INTERVAL
+    candles = fetch_candles(symbol, interval)
     if not candles or len(candles) < 8:
         return None
     candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
@@ -288,9 +288,9 @@ def check_setup(symbol, trend):
     buy = (trend == "UP") and l <= sma7 * (1 + TOLERANCE) and body_low > sma7 * (1 - TOLERANCE) and body_low > mid
     sell = (trend == "DOWN") and h >= sma7 * (1 - TOLERANCE) and body_high < sma7 * (1 + TOLERANCE) and body_high < mid
     if buy:
-        return {"side": "buy", "entry": c, "sl": l, "sma7": sma7, "mid": mid}
+        return {"side": "buy", "entry": c, "sl": l, "sma7": sma7, "mid": mid, "tf": interval}
     elif sell:
-        return {"side": "sell", "entry": c, "sl": h, "sma7": sma7, "mid": mid}
+        return {"side": "sell", "entry": c, "sl": h, "sma7": sma7, "mid": mid, "tf": interval}
     return None
 
 
@@ -308,7 +308,7 @@ def calculate_position_size(entry, stop_loss):
     return size
 
 
-def open_position(state, symbol, side, entry, stop_loss, size):
+def open_position(state, symbol, side, entry, stop_loss, size, timeframe="4h"):
     """باز کردن پوزیشن (فقط buy در اسپات)"""
     if side != "buy":
         return False
@@ -336,10 +336,10 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     next_tp = entry + r
     
     if DRY_RUN:
-        print(f"[DRY RUN] WOULD BUY {symbol}")
+        print(f"[DRY RUN] WOULD BUY {symbol} [{timeframe}]")
         print(f"  Entry: {entry}, SL: {stop_loss}, Size: {size:.8f}, R: {r:.6f}")
         print(f"  USDT to spend: ${usdt_amount:.4f}")
-        send_telegram(f"🔵 سیگنال خرید {symbol}\nورود: {entry}\nاستاپ: {stop_loss}\nحجم: ${usdt_amount:.4f}")
+        send_telegram(f"🔵 سیگنال خرید {symbol} [{timeframe}]\nورود: {entry}\nاستاپ: {stop_loss}\nحجم: ${usdt_amount:.4f}")
         success = True
     else:
         try:
@@ -349,7 +349,7 @@ def open_position(state, symbol, side, entry, stop_loss, size):
             receipt = pancake_swap(token_address, usdt_wei, is_buy=True)
             if receipt and receipt.status == 1:
                 print(f"[BUY OK] TX: {receipt.transactionHash.hex()}")
-                send_telegram(f"✅ خرید انجام شد\n{symbol}\nورود: {entry}\nحجم: ${usdt_amount:.4f}")
+                send_telegram(f"✅ خرید انجام شد\n{symbol} [{timeframe}]\nورود: {entry}\nحجم: ${usdt_amount:.4f}")
                 success = True
             else:
                 print(f"[BUY FAIL]")
@@ -371,6 +371,7 @@ def open_position(state, symbol, side, entry, stop_loss, size):
             "next_tp": next_tp,
             "tp_count": 0,
             "risk_amount": risk_amount,
+            "timeframe": timeframe,
             "opened_at": str(datetime.now())
         }
         state["open_positions"].append(position)
@@ -422,13 +423,11 @@ def update_positions(state, current_prices):
         price = current_prices[symbol]
         r = pos["R"]
         
-        # استاپ خوردن
         if price <= pos["current_sl"]:
             print(f"[STOP HIT] {symbol} @ {pos['current_sl']:.6f}")
             close_position(state, pos, pos["current_sl"], reason="stop")
             continue
         
-        # Trailing: هر 1R، استاپ 1R بالا
         while price >= pos["next_tp"]:
             pos["tp_count"] += 1
             new_sl = pos["next_tp"]
@@ -461,6 +460,7 @@ def main():
     print(f"=== PancakeSwap Bot [{mode}] ===")
     print(f"Capital: ${CAPITAL} | Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.6f}")
     print(f"Wallet: {WALLET_ADDRESS}")
+    print(f"Timeframes: 1h + 4h")
     
     state = load_state()
     state = reset_daily_if_needed(state)
@@ -468,14 +468,12 @@ def main():
     print(f"\nTotal PnL: ${state.get('total_pnl', 0):.6f}")
     print(f"Open: {len(state['open_positions'])} | Closed: {len(state.get('closed_positions', []))}")
     
-    # آپدیت پوزیشن‌های باز
     if state["open_positions"]:
         print(f"\n--- Updating {len(state['open_positions'])} positions ---")
         symbols = [p["symbol"] for p in state["open_positions"]]
         prices = get_current_prices(symbols)
         update_positions(state, prices)
     
-    # اسکن ستاپ جدید
     print("\n--- Scanning ---")
     btc_closes = get_btc_daily_closes()
     if not btc_closes:
@@ -483,18 +481,29 @@ def main():
         return
     
     top = get_top_symbols()
-    print(f"Scanning {len(top)} pairs (with PancakeSwap addresses)...")
+    print(f"Scanning {len(top)} pairs (1h + 4h)...")
     
     for sym in top:
         trend = get_coin_trend(sym, btc_closes)
         if not trend:
             continue
-        setup = check_setup(sym, trend)
-        if setup and setup["side"] == "buy":
-            print(f"\n[SETUP] {sym} | BUY")
-            size = calculate_position_size(setup["entry"], setup["sl"])
+        
+        # تایم‌فریم 4 ساعته
+        setup_4h = check_setup(sym, trend, ENTRY_INTERVAL)
+        if setup_4h and setup_4h["side"] == "buy":
+            print(f"\n[SETUP-4H] {sym} | BUY")
+            size = calculate_position_size(setup_4h["entry"], setup_4h["sl"])
             if size > 0:
-                open_position(state, sym, "buy", setup["entry"], setup["sl"], size)
+                open_position(state, sym, "buy", setup_4h["entry"], setup_4h["sl"], size, "4h")
+        
+        # تایم‌فریم 1 ساعته
+        setup_1h = check_setup(sym, trend, ENTRY_INTERVAL_1H)
+        if setup_1h and setup_1h["side"] == "buy":
+            print(f"\n[SETUP-1H] {sym} | BUY")
+            size = calculate_position_size(setup_1h["entry"], setup_1h["sl"])
+            if size > 0:
+                open_position(state, sym, "buy", setup_1h["entry"], setup_1h["sl"], size, "1h")
+        
         time.sleep(0.1)
     
     print("\n=== Complete ===")
