@@ -1,37 +1,32 @@
 """
-ربات معامله‌گر خودکار Aster DEX
-استراتژی: SMA7 (سایه/بادی/نیمه کندل)
-فیلتر روند: SMA25 روزانه + قدرت نسبی نسبت به BTC
-مدیریت ریسک: 0.25% هر معامله، 1% سقف روزانه
-Trailing Stop پله‌ای: هر 1R، 1R بالاتر
+ربات معامله‌گر خودکار PancakeSwap (Spot)
+استراتژی: SMA7 (بدون تغییر)
+شبکه: BNB Chain (BEP20)
 """
 
 import requests
 import time
 import json
 import os
-import hmac
-import hashlib
 from datetime import datetime
+from web3 import Web3
 
 # ================= تنظیمات =================
-DRY_RUN = False          # False = معامله واقعی، True = فقط لاگ
-LEVERAGE = 1             # بدون اهرم
-MARGIN_MODE = "ISOLATED"
+DRY_RUN = True           # True = فقط لاگ، False = معامله واقعی
+LEVERAGE = 1             # اسپات: بدون اهرم
 
-# کلیدهای Aster (از GitHub Secrets میان)
-ASTER_API_KEY = os.environ.get("ASTER_API_KEY", "")
-ASTER_SECRET_KEY = os.environ.get("ASTER_SECRET_KEY", "")
-ASTER_AGENT_ADDRESS = os.environ.get("ASTER_AGENT_ADDRESS", "")
+# کلید کیف پول (از GitHub Secrets)
+BSC_PRIVATE_KEY = os.environ.get("BSC_PRIVATE_KEY", "")
+WALLET_ADDRESS = "0x54FF9b635C081b81631220ca1d4B0894F5faA9eC"
 
-# تلگرام
+# تلگرام (اختیاری)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-CAPITAL = 2              # سرمایه کل (دلار)
-RISK_PER_TRADE = 0.0025  # ریسک هر معامله: 0.25%
-MAX_DAILY_RISK = 0.01    # حداکثر ریسک روزانه: 1%
-MAX_CONCURRENT = 1       # فقط 1 پوزیشن
+CAPITAL = 2
+RISK_PER_TRADE = 0.0025
+MAX_DAILY_RISK = 0.01
+MAX_CONCURRENT = 1
 
 TREND_INTERVAL = "1day"
 ENTRY_INTERVAL = "4hour"
@@ -41,22 +36,50 @@ SMA_PERIOD = 25
 BTC_SYMBOL = "BTC-USDT"
 STATE_FILE = "trading_state.json"
 
-ASTER_BASE = "https://fapi.asterdex.com"
+# ================= BSC / PancakeSwap =================
+BSC_RPC = "https://bsc-dataseed.binance.org/"
+PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E"
+USDT_BSC = "0x55d398326f99059fF775485246999027B3197955"
+SLIPPAGE = 0.02  # 2%
 
-STABLECOINS = [
-    'USDC','FDUSD','TUSD','BUSD','DAI','USDP','EUR','GBP','USD1','USDE',
-    'USDS','PYUSD','USDD','USTC','FRAX','GUSD','LUSD','SUSD','USDT','USDT0',
-    'USDR','USDX','USDY','ALUSD','MIM','DOLA','CUSD','CEUR','EURS','STEUR',
-    'VAI','XUSD','USDN','UXD','USK','USDL','RLUSD','USDG','USDQ','USDJ',
-    'USDF','USDH','USDTB','USDFI'
+ROUTER_ABI = [
+    {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},
 ]
 
+ERC20_ABI = [
+    {"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
+]
+
+# آدرس توکن‌های BEP20 روی PancakeSwap
+TOKEN_ADDRESSES = {
+    "BNB-USDT": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "ETH-USDT": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+    "BTC-USDT": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+    "CAKE-USDT": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+    "XRP-USDT": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+    "ADA-USDT": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+    "DOGE-USDT": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+    "SOL-USDT": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
+    "MATIC-USDT": "0xCC42724C6683B7E57334c4E856f4c9965ED682bD",
+    "DOT-USDT": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+    "LINK-USDT": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+    "LTC-USDT": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+    "AVAX-USDT": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+    "TRX-USDT": "0x85EAC5Ac2F758618dFa09bDbe0cf174e7d574D5B",
+}
+
 HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+# اتصال Web3
+w3 = Web3(Web3.HTTPProvider(BSC_RPC))
 
 
 # ================= تلگرام =================
 def send_telegram(msg):
-    """ارسال پیام به تلگرام"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
     try:
@@ -70,162 +93,85 @@ def send_telegram(msg):
         print(f"TELEGRAM ERROR: {e}")
 
 
-# ================= Aster API =================
-def aster_sign(timestamp, method, path, query_string, body_str=""):
-    """امضای Aster (شبیه Binance)"""
-    # پیام = timestamp + method + path + query + body
-    if body_str:
-        message = f"{timestamp}{method.upper()}{path}{query_string}{body_str}"
-    else:
-        message = f"{timestamp}{method.upper()}{path}{query_string}"
-    
-    signature = hmac.new(
-        ASTER_SECRET_KEY.encode('utf-8'),
-        message.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    return signature
-
-
-def aster_request(method, path, params=None, body=None, signed=True, debug=True):
-    """درخواست به Aster API"""
-    timestamp = str(int(time.time() * 1000))
-    
-    # ساخت query string
-    if params:
-        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
-    else:
-        query_string = ""
-    
-    # ساخت body
-    body_str = json.dumps(body, separators=(',', ':')) if body else ""
-    
-    # هدرها
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0"
-    }
-    
-    if signed:
-        # برای Aster: signer توی body اضافه میشه
-        if body:
-            body["signer"] = ASTER_AGENT_ADDRESS
-            body_str = json.dumps(body, separators=(',', ':'))
-        
-        signature = aster_sign(timestamp, method, path, query_string, body_str)
-        
-        # هدرهای Aster (شبیه Binance)
-        headers["X-MBX-APIKEY"] = ASTER_API_KEY
-        
-        # timestamp و signature به query اضافه میشن (Binance style)
-        if query_string:
-            query_string += f"&timestamp={timestamp}&signature={signature}"
-        else:
-            query_string = f"timestamp={timestamp}&signature={signature}"
-    
-    # URL نهایی
-    url = f"{ASTER_BASE}{path}"
-    if query_string:
-        url += f"?{query_string}"
-    
+# ================= PancakeSwap =================
+def get_token_decimals(token_address):
     try:
-        if method.upper() == "GET":
-            r = requests.get(url, headers=headers, timeout=15)
-        elif method.upper() == "POST":
-            r = requests.post(url, headers=headers, data=body_str, timeout=15)
-        elif method.upper() == "DELETE":
-            r = requests.delete(url, headers=headers, timeout=15)
-        else:
-            return None
-        
-        if debug:
-            print(f"[ASTER] {method} {path}")
-            print(f"  Status: {r.status_code}")
-            print(f"  Response: {r.text[:300]}")
-        
-        if r.status_code == 200:
-            return r.json() if r.text else None
-        else:
-            return None
+        c = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
+        return c.functions.decimals().call()
+    except:
+        return 18
+
+
+def get_token_balance(token_address):
+    try:
+        c = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
+        bal = c.functions.balanceOf(Web3.to_checksum_address(WALLET_ADDRESS)).call()
+        dec = c.functions.decimals().call()
+        return bal / (10 ** dec)
     except Exception as e:
-        print(f"[ASTER ERROR] {e}")
-        return None
+        print(f"BALANCE ERROR: {e}")
+        return 0
 
 
-def aster_place_order(symbol, side, quantity, stop_price=None):
-    """ثبت سفارش MARKET در Aster"""
-    params = {
-        "symbol": symbol,
-        "side": side.upper(),
-        "type": "MARKET",
-        "quantity": str(quantity),
-    }
+def get_amounts_out(amount_in_wei, path):
+    router = w3.eth.contract(address=Web3.to_checksum_address(PANCAKE_ROUTER), abi=ROUTER_ABI)
+    return router.functions.getAmountsOut(amount_in_wei, path).call()
+
+
+def approve_token(token_address, amount_wei):
+    c = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
+    allowance = c.functions.allowance(
+        Web3.to_checksum_address(WALLET_ADDRESS),
+        Web3.to_checksum_address(PANCAKE_ROUTER)
+    ).call()
+    if allowance >= amount_wei:
+        return True
+    tx = c.functions.approve(
+        Web3.to_checksum_address(PANCAKE_ROUTER), amount_wei
+    ).build_transaction({
+        'from': Web3.to_checksum_address(WALLET_ADDRESS),
+        'gas': 100000,
+        'gasPrice': w3.to_wei(3, 'gwei'),
+        'nonce': w3.eth.get_transaction_count(Web3.to_checksum_address(WALLET_ADDRESS)),
+    })
+    signed = w3.eth.account.sign_transaction(tx, private_key=BSC_PRIVATE_KEY)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+    return True
+
+
+def pancake_swap(token_address, amount_in_wei, is_buy):
+    """خرید: USDT -> Token | فروش: Token -> USDT"""
+    if is_buy:
+        path = [Web3.to_checksum_address(USDT_BSC), Web3.to_checksum_address(token_address)]
+    else:
+        path = [Web3.to_checksum_address(token_address), Web3.to_checksum_address(USDT_BSC)]
     
-    # اگه استاپ لاس داشت، از STOP_MARKET استفاده می‌کنیم
-    # برای سادگی، اول سفارش MARKET می‌زنیم و بعد استاپ رو جدا ثبت می‌کنیم
+    amounts = get_amounts_out(amount_in_wei, path)
+    amount_out_min = int(amounts[-1] * (1 - SLIPPAGE))
+    deadline = int(time.time()) + 600
     
-    r = aster_request("POST", "/fapi/v3/order", params=params)
+    if not is_buy:
+        approve_token(token_address, amount_in_wei)
     
-    # حالا اگه استاپ لاس داشت، سفارش استاپ رو ثبت می‌کنیم
-    if r and stop_price:
-        stop_side = "SELL" if side.upper() == "BUY" else "BUY"
-        stop_params = {
-            "symbol": symbol,
-            "side": stop_side,
-            "type": "STOP_MARKET",
-            "quantity": str(quantity),
-            "stopPrice": str(stop_price),
-            "reduceOnly": "true",
-        }
-        stop_r = aster_request("POST", "/fapi/v3/order", params=stop_params)
-        print(f"[STOP LOSS REGISTERED] {stop_r}")
+    router = w3.eth.contract(address=Web3.to_checksum_address(PANCAKE_ROUTER), abi=ROUTER_ABI)
+    tx = router.functions.swapExactTokensForTokens(
+        amount_in_wei,
+        amount_out_min,
+        path,
+        Web3.to_checksum_address(WALLET_ADDRESS),
+        deadline
+    ).build_transaction({
+        'from': Web3.to_checksum_address(WALLET_ADDRESS),
+        'gas': 350000,
+        'gasPrice': w3.to_wei(3, 'gwei'),
+        'nonce': w3.eth.get_transaction_count(Web3.to_checksum_address(WALLET_ADDRESS)),
+    })
     
-    return r
-
-
-def aster_close_position(symbol, quantity=None):
-    """بستن پوزیشن با سفارش MARKET معکوس"""
-    # اول موقعیت فعلی رو می‌گیریم
-    positions = aster_get_positions()
-    if not positions:
-        return None
-    
-    for pos in positions:
-        if pos.get("symbol") == symbol:
-            amt = float(pos.get("positionAmt", 0))
-            if amt == 0:
-                return None
-            
-            side = "SELL" if amt > 0 else "BUY"
-            qty = abs(amt)
-            
-            params = {
-                "symbol": symbol,
-                "side": side,
-                "type": "MARKET",
-                "quantity": str(qty),
-                "reduceOnly": "true",
-            }
-            return aster_request("POST", "/fapi/v3/order", params=params)
-    return None
-
-
-def aster_get_positions():
-    return aster_request("GET", "/fapi/v3/positionRisk")
-
-
-def aster_get_balance():
-    return aster_request("GET", "/fapi/v3/balance")
-
-
-def aster_set_leverage(symbol, leverage):
-    params = {"symbol": symbol, "leverage": str(leverage)}
-    return aster_request("POST", "/fapi/v3/leverage", params=params)
-
-
-def aster_set_margin_type(symbol, margin_type="ISOLATED"):
-    params = {"symbol": symbol, "marginType": margin_type}
-    return aster_request("POST", "/fapi/v3/marginType", params=params)
+    signed = w3.eth.account.sign_transaction(tx, private_key=BSC_PRIVATE_KEY)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+    return receipt
 
 
 # ================= حافظه =================
@@ -256,9 +202,8 @@ def reset_daily_if_needed(state):
     return state
 
 
-# ================= KuCoin (تحلیل بازار) =================
+# ================= KuCoin (تحلیل) =================
 def fetch_candles(symbol, interval):
-    """دریافت کندل‌ها از KuCoin (برای تحلیل)"""
     try:
         data = requests.get(
             f"https://api.kucoin.com/api/v1/market/candles?type={interval}&symbol={symbol}",
@@ -271,7 +216,6 @@ def fetch_candles(symbol, interval):
 
 
 def get_top_symbols():
-    """دریافت 50 ارز برتر از KuCoin"""
     try:
         data = requests.get(
             "https://api.kucoin.com/api/v1/market/allTickers",
@@ -285,11 +229,9 @@ def get_top_symbols():
     for t in data.get('data', {}).get('ticker', []):
         sym = t.get('symbol', '')
         if sym.endswith('-USDT'):
-            base = sym.replace('-USDT', '')
-            if base not in STABLECOINS:
+            if sym in TOKEN_ADDRESSES:
                 vol = float(t.get('volValue', 0))
-                if vol > 1000000:
-                    pairs.append((sym, vol))
+                pairs.append((sym, vol))
     
     pairs.sort(key=lambda x: x[1], reverse=True)
     return [p[0] for p in pairs[:TOP_N]]
@@ -304,60 +246,47 @@ def get_btc_daily_closes():
 
 
 def get_coin_trend(symbol, btc_closes):
-    """تشخیص روند (SMA25 روزانه + قدرت نسبی به BTC)"""
+    """استراتژی: SMA25 روزانه + قدرت نسبی به BTC (بدون تغییر)"""
     if symbol == BTC_SYMBOL:
         return None
-    
     candles = fetch_candles(symbol, TREND_INTERVAL)
     if not candles or len(candles) < SMA_PERIOD + 2:
         return None
-    
     candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
     coin_closes = {c[0]: float(c[2]) for c in candles}
-    
     closes_list = list(coin_closes.values())
     sma25 = sum(closes_list[-SMA_PERIOD:]) / SMA_PERIOD
     coin_trend = "UP" if closes_list[-1] > sma25 else "DOWN"
-    
     if btc_closes is None:
         return None
-    
     common = sorted(set(coin_closes.keys()) & set(btc_closes.keys()))
     if len(common) < SMA_PERIOD + 1:
         return None
-    
     ratios = [coin_closes[t] / btc_closes[t] for t in common]
     ratio_sma = sum(ratios[-SMA_PERIOD:]) / SMA_PERIOD
     rel_trend = "UP" if ratios[-1] > ratio_sma else "DOWN"
-    
     if coin_trend == rel_trend:
         return coin_trend
     return None
 
 
 def check_setup(symbol, trend):
-    """بررسی ستاپ SMA7 در تایم 4 ساعته"""
+    """استراتژی SMA7 (بدون تغییر)"""
     candles = fetch_candles(symbol, ENTRY_INTERVAL)
     if not candles or len(candles) < 8:
         return None
     candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
-    
     opens = [float(c[1]) for c in candles]
     closes = [float(c[2]) for c in candles]
     highs = [float(c[3]) for c in candles]
     lows = [float(c[4]) for c in candles]
-    
     sma7 = sum(closes[-7:]) / 7
     o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
     body_low = min(o, c)
     body_high = max(o, c)
     mid = (h + l) / 2
-    
-    # ستاپ خرید
     buy = (trend == "UP") and l <= sma7 * (1 + TOLERANCE) and body_low > sma7 * (1 - TOLERANCE) and body_low > mid
-    # ستاپ فروش
     sell = (trend == "DOWN") and h >= sma7 * (1 - TOLERANCE) and body_high < sma7 * (1 + TOLERANCE) and body_high < mid
-    
     if buy:
         return {"side": "buy", "entry": c, "sl": l, "sma7": sma7, "mid": mid}
     elif sell:
@@ -367,7 +296,7 @@ def check_setup(symbol, trend):
 
 # ================= مدیریت پوزیشن =================
 def calculate_position_size(entry, stop_loss):
-    """محاسبه حجم بر اساس ریسک 0.25%"""
+    """محاسبه حجم بر اساس ریسک 0.25% (بدون تغییر)"""
     risk_amount = CAPITAL * RISK_PER_TRADE
     stop_distance = abs(entry - stop_loss)
     if stop_distance == 0:
@@ -380,51 +309,59 @@ def calculate_position_size(entry, stop_loss):
 
 
 def open_position(state, symbol, side, entry, stop_loss, size):
-    """باز کردن پوزیشن"""
+    """باز کردن پوزیشن (فقط buy در اسپات)"""
+    if side != "buy":
+        return False
+    
     risk_amount = abs(entry - stop_loss) * size
     daily_limit = CAPITAL * MAX_DAILY_RISK
-    
     if state["today_risk_used"] + risk_amount > daily_limit:
         print(f"[BLOCKED] Daily risk limit reached")
-        send_telegram(f"⛔️ سقف ریسک روزانه پر شده")
         return False
-    
     if len(state["open_positions"]) >= MAX_CONCURRENT:
-        print(f"[BLOCKED] Max positions reached")
+        print(f"[BLOCKED] Max positions: {MAX_CONCURRENT}")
         return False
     
-    aster_symbol = symbol.replace("-", "")
+    token_address = TOKEN_ADDRESSES.get(symbol)
+    if not token_address:
+        print(f"[SKIP] No token address for {symbol}")
+        return False
+    
+    usdt_amount = size * entry
+    if usdt_amount < 0.10:
+        print(f"[SKIP] Too small: ${usdt_amount:.4f}")
+        return False
+    
     r = abs(entry - stop_loss)
-    next_tp = entry + r if side == "buy" else entry - r
+    next_tp = entry + r
     
     if DRY_RUN:
-        print(f"[DRY RUN] WOULD OPEN {side.upper()} {symbol}")
+        print(f"[DRY RUN] WOULD BUY {symbol}")
         print(f"  Entry: {entry}, SL: {stop_loss}, Size: {size:.8f}, R: {r:.6f}")
-        msg = f"🔵 سیگنال {'خرید' if side=='buy' else 'فروش'}\nنماد: {symbol}\nورود: {entry}\nاستاپ: {stop_loss}\nحجم: {size:.6f}"
-        send_telegram(msg)
+        print(f"  USDT to spend: ${usdt_amount:.4f}")
+        send_telegram(f"🔵 سیگنال خرید {symbol}\nورود: {entry}\nاستاپ: {stop_loss}\nحجم: ${usdt_amount:.4f}")
         success = True
     else:
-        # تنظیم اهرم و مارجین
-        aster_set_leverage(aster_symbol, LEVERAGE)
-        aster_set_margin_type(aster_symbol, MARGIN_MODE)
-        time.sleep(0.5)
-        
-        # ثبت سفارش
-        resp = aster_place_order(aster_symbol, side.upper(), size, stop_loss)
-        print(f"[ASTER ORDER] {resp}")
-        
-        if resp and resp.get("orderId"):
-            success = True
-            msg = f"✅ پوزیشن باز شد\nنماد: {symbol}\nجهت: {side.upper()}\nورود: {entry}\nاستاپ: {stop_loss}\nحجم: {size:.6f}"
-            send_telegram(msg)
-        else:
+        try:
+            usdt_dec = 18
+            usdt_wei = int(usdt_amount * (10 ** usdt_dec))
+            approve_token(USDT_BSC, usdt_wei)
+            receipt = pancake_swap(token_address, usdt_wei, is_buy=True)
+            if receipt and receipt.status == 1:
+                print(f"[BUY OK] TX: {receipt.transactionHash.hex()}")
+                send_telegram(f"✅ خرید انجام شد\n{symbol}\nورود: {entry}\nحجم: ${usdt_amount:.4f}")
+                success = True
+            else:
+                print(f"[BUY FAIL]")
+                success = False
+        except Exception as e:
+            print(f"[BUY ERROR] {e}")
             success = False
-            send_telegram(f"❌ خطا در باز کردن پوزیشن {symbol}")
     
     if success:
         position = {
             "symbol": symbol,
-            "aster_symbol": aster_symbol,
+            "token_address": token_address,
             "side": side,
             "entry": entry,
             "original_sl": stop_loss,
@@ -443,66 +380,63 @@ def open_position(state, symbol, side, entry, stop_loss, size):
     return False
 
 
+def close_position(state, pos, current_price, reason="stop"):
+    """بستن پوزیشن (فروش توکن)"""
+    symbol = pos["symbol"]
+    token_address = pos["token_address"]
+    
+    if DRY_RUN:
+        pnl = (current_price - pos["entry"]) * pos["size"]
+        print(f"[DRY RUN] WOULD SELL {symbol} @ {current_price:.6f} | PnL: ${pnl:.6f}")
+    else:
+        try:
+            bal = get_token_balance(token_address)
+            if bal > 0:
+                dec = get_token_decimals(token_address)
+                bal_wei = int(bal * (10 ** dec))
+                receipt = pancake_swap(token_address, bal_wei, is_buy=False)
+                if receipt and receipt.status == 1:
+                    print(f"[SELL OK] TX: {receipt.transactionHash.hex()}")
+                else:
+                    print(f"[SELL FAIL]")
+        except Exception as e:
+            print(f"[SELL ERROR] {e}")
+        pnl = (current_price - pos["entry"]) * pos["size"]
+    
+    pos["pnl"] = pnl
+    pos["closed_at"] = str(datetime.now())
+    pos["close_reason"] = reason
+    state["closed_positions"].append(pos)
+    state["total_pnl"] = state.get("total_pnl", 0) + pnl
+    state["open_positions"].remove(pos)
+    send_telegram(f"{'🛑' if reason=='stop' else '📈'} بسته شد {symbol}\nقیمت: {current_price}\nPnL: ${pnl:.6f}")
+    save_state(state)
+
+
 def update_positions(state, current_prices):
-    """آپدیت Trailing Stop"""
+    """آپدیت Trailing Stop (بدون تغییر در منطق)"""
     for pos in list(state["open_positions"]):
         symbol = pos["symbol"]
         if symbol not in current_prices:
             continue
-        
         price = current_prices[symbol]
-        side = pos["side"]
         r = pos["R"]
         
-        if side == "buy":
-            if price <= pos["current_sl"]:
-                pnl = (pos["current_sl"] - pos["entry"]) * pos["size"]
-                print(f"[STOP HIT] {symbol} @ {pos['current_sl']:.6f} | PnL: ${pnl:.6f}")
-                if not DRY_RUN:
-                    aster_close_position(pos["aster_symbol"])
-                pos["pnl"] = pnl
-                pos["closed_at"] = str(datetime.now())
-                state["closed_positions"].append(pos)
-                state["total_pnl"] = state.get("total_pnl", 0) + pnl
-                state["open_positions"].remove(pos)
-                send_telegram(f"🛑 استاپ خورد\n{symbol}\nقیمت: {pos['current_sl']}\nسود/زیان: ${pnl:.6f}")
-                save_state(state)
-                continue
-            
-            while price >= pos["next_tp"]:
-                pos["tp_count"] += 1
-                new_sl = pos["next_tp"]
-                pos["current_sl"] = new_sl
-                print(f"[TP{pos['tp_count']} HIT] {symbol} | SL → {new_sl:.6f}")
-                pos["next_tp"] = new_sl + r
-                send_telegram(f"📈 TP{pos['tp_count']} زده شد\n{symbol}\nاستاپ جدید: {new_sl:.6f}")
-                save_state(state)
+        # استاپ خوردن
+        if price <= pos["current_sl"]:
+            print(f"[STOP HIT] {symbol} @ {pos['current_sl']:.6f}")
+            close_position(state, pos, pos["current_sl"], reason="stop")
+            continue
         
-        else:  # sell
-            if price >= pos["current_sl"]:
-                pnl = (pos["entry"] - pos["current_sl"]) * pos["size"]
-                print(f"[STOP HIT] {symbol} @ {pos['current_sl']:.6f} | PnL: ${pnl:.6f}")
-                if not DRY_RUN:
-                    aster_close_position(pos["aster_symbol"])
-                pos["pnl"] = pnl
-                pos["closed_at"] = str(datetime.now())
-                state["closed_positions"].append(pos)
-                state["total_pnl"] = state.get("total_pnl", 0) + pnl
-                state["open_positions"].remove(pos)
-                send_telegram(f"🛑 استاپ خورد\n{symbol}\nقیمت: {pos['current_sl']}\nسود/زیان: ${pnl:.6f}")
-                save_state(state)
-                continue
-            
-            while price <= pos["next_tp"]:
-                pos["tp_count"] += 1
-                new_sl = pos["next_tp"]
-                pos["current_sl"] = new_sl
-                print(f"[TP{pos['tp_count']} HIT] {symbol} | SL → {new_sl:.6f}")
-                pos["next_tp"] = new_sl - r
-                send_telegram(f"📉 TP{pos['tp_count']} زده شد\n{symbol}\nاستاپ جدید: {new_sl:.6f}")
-                save_state(state)
-    
-    save_state(state)
+        # Trailing: هر 1R، استاپ 1R بالا
+        while price >= pos["next_tp"]:
+            pos["tp_count"] += 1
+            new_sl = pos["next_tp"]
+            pos["current_sl"] = new_sl
+            pos["next_tp"] = new_sl + r
+            print(f"[TP{pos['tp_count']}] {symbol} | SL → {new_sl:.6f}")
+            send_telegram(f"📈 TP{pos['tp_count']} {symbol}\nاستاپ جدید: {new_sl:.6f}")
+            save_state(state)
 
 
 def get_current_prices(symbols):
@@ -523,16 +457,15 @@ def get_current_prices(symbols):
 
 # ================= اجرای اصلی =================
 def main():
-    mode = "DRY RUN" if DRY_RUN else "LIVE TRADING"
-    print(f"=== Aster Bot [{mode}] ===")
-    print(f"Capital: ${CAPITAL} | Leverage: {LEVERAGE}x | Margin: {MARGIN_MODE}")
-    print(f"Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.6f} | Daily: ${CAPITAL*MAX_DAILY_RISK:.6f}")
+    mode = "DRY RUN" if DRY_RUN else "LIVE"
+    print(f"=== PancakeSwap Bot [{mode}] ===")
+    print(f"Capital: ${CAPITAL} | Risk/Trade: ${CAPITAL*RISK_PER_TRADE:.6f}")
+    print(f"Wallet: {WALLET_ADDRESS}")
     
     state = load_state()
     state = reset_daily_if_needed(state)
     
-    print(f"\n--- Summary ---")
-    print(f"Total PnL: ${state.get('total_pnl', 0):.6f}")
+    print(f"\nTotal PnL: ${state.get('total_pnl', 0):.6f}")
     print(f"Open: {len(state['open_positions'])} | Closed: {len(state.get('closed_positions', []))}")
     
     # آپدیت پوزیشن‌های باز
@@ -542,7 +475,7 @@ def main():
         prices = get_current_prices(symbols)
         update_positions(state, prices)
     
-    # اسکن ستاپ‌های جدید
+    # اسکن ستاپ جدید
     print("\n--- Scanning ---")
     btc_closes = get_btc_daily_closes()
     if not btc_closes:
@@ -550,24 +483,21 @@ def main():
         return
     
     top = get_top_symbols()
-    print(f"Scanning {len(top)} coins...")
+    print(f"Scanning {len(top)} pairs (with PancakeSwap addresses)...")
     
-    found = 0
     for sym in top:
         trend = get_coin_trend(sym, btc_closes)
         if not trend:
             continue
-        
         setup = check_setup(sym, trend)
-        if setup:
-            found += 1
-            print(f"\n[SETUP] {sym} | {setup['side'].upper()}")
+        if setup and setup["side"] == "buy":
+            print(f"\n[SETUP] {sym} | BUY")
             size = calculate_position_size(setup["entry"], setup["sl"])
             if size > 0:
-                open_position(state, sym, setup["side"], setup["entry"], setup["sl"], size)
+                open_position(state, sym, "buy", setup["entry"], setup["sl"], size)
         time.sleep(0.1)
     
-    print(f"\n=== Complete | Found {found} setups ===")
+    print("\n=== Complete ===")
 
 
 if __name__ == "__main__":
