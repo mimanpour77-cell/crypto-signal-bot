@@ -1,7 +1,22 @@
 {
-  "open_positions": [],
+  "open_positions": [
+    {
+      "symbol": "XRP-USDT",
+      "token_address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+      "side": "buy",
+      "entry": 1.53817,
+      "original_sl": 1.52722,
+      "current_sl": 1.52722,
+      "size": 0.4566210045662094,
+      "R": 0.010950000000000015,
+      "next_tp": 1.54912,
+      "tp_count": 0,
+      "risk_amount": 0.005,
+      "opened_at": "2026-09-27 12:17:40.742907"
+    }
+  ],
   "closed_positions": [],
   "today_date": "2026-09-27",
-  "today_risk_used": 0.0,
+  "today_risk_used": 0.005,
   "total_pnl": 0.0
 }
