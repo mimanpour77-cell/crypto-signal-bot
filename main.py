@@ -507,6 +507,27 @@ def main():
         update_positions(state, current_prices)
     print("--- Scanning ---")
     btc_closes = get_btc_daily_closes()
+    top = get_top_symbols()
+print("Scanning " + str(len(top)) + " pairs...")
+for sym in top:
+    if len(state["open_positions"]) >= MAX_CONCURRENT:
+        break
+    trend = get_coin_trend(sym, btc_closes)
+    if not trend:
+        continue
+    setup_4h = check_setup(sym, trend, ENTRY_INTERVAL)
+    if setup_4h and setup_4h["side"] == "buy":
+        print("[SETUP-4H] " + sym)
+        size = calculate_position_size(setup_4h["entry"], setup_4h["sl"], usdt_balance)
+        if size > 0:
+            open_position(state, sym, "buy", setup_4h["entry"], setup_4h["sl"], size, "4h")
+    setup_1h = check_setup(sym, trend, ENTRY_INTERVAL_1H)
+    if setup_1h and setup_1h["side"] == "buy":
+        print("[SETUP-1H] " + sym)
+        size = calculate_position_size(setup_1h["entry"], setup_1h["sl"], usdt_balance)
+        if size > 0:
+            open_position(state, sym, "buy", setup_1h["entry"], setup_1h["sl"], size, "1h")
+    time.sleep(0.1)
     print("=== Complete ===")
     send_positions_report(state, current_prices)
 
