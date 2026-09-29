@@ -1,6 +1,5 @@
 """
 ربات معامله‌گر خودکار PancakeSwap (Spot)
-استراتژی: SMA7 + تشخیص ساختار بازار (HH/HL)
 شبکه: BNB Chain (BEP20)
 """
 
@@ -12,10 +11,8 @@ from datetime import datetime, timedelta
 from web3 import Web3
 
 DRY_RUN = True
-
 BSC_PRIVATE_KEY = os.environ.get("BSC_PRIVATE_KEY", "")
 WALLET_ADDRESS = "0x54FF9b635C081b81631220ca1d4B0894F5faA9eC"
-
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
@@ -23,7 +20,6 @@ CAPITAL = 2
 RISK_PER_TRADE = 0.0025
 MAX_DAILY_RISK = 0.01
 MAX_CONCURRENT = 4
-
 TREND_INTERVAL = "1day"
 ENTRY_INTERVAL = "4hour"
 ENTRY_INTERVAL_1H = "1hour"
@@ -37,7 +33,6 @@ BSC_RPC = "https://bsc-dataseed.binance.org/"
 PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E"
 USDT_BSC = "0x55d398326f99059fF775485246999027B3197955"
 SLIPPAGE = 0.02
-
 ROUTER_ABI = [
     {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},
@@ -69,8 +64,6 @@ TOKEN_ADDRESSES = {
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 w3 = Web3(Web3.HTTPProvider(BSC_RPC))
-
-
 def send_telegram(msg):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
@@ -208,7 +201,7 @@ def block_for_tomorrow(state):
     state["blocked_until"] = str(tomorrow)
     save_state(state)
     print("[BLOCKED] Trading paused until " + str(tomorrow))
-    send_telegram("⛔ معاملات متوقف شد\n\n۴ استاپ در یک روز خورد\nادامه: " + str(tomorrow))
+    send_telegram("معاملات متوقف شد - 4 استاپ. ادامه: " + str(tomorrow))
 
 
 def get_daily_pnl(state):
@@ -254,9 +247,7 @@ def get_all_pnl(state):
         if p.get("pnl", 0) > 0:
             wins += 1
     return total, count, wins
-
-
-def fetch_candles(symbol, interval):
+    def fetch_candles(symbol, interval):
     try:
         data = requests.get(
             "https://api.kucoin.com/api/v1/market/candles?type=" + interval + "&symbol=" + symbol,
@@ -314,9 +305,7 @@ def get_coin_trend(symbol, btc_closes):
     if coin_trend == rel_trend:
         return coin_trend
     return None
-
-
-def find_swing_points(highs, lows, lookback=2):
+    def find_swing_points(highs, lows, lookback=2):
     swing_highs = []
     swing_lows = []
     for i in range(lookback, len(highs) - lookback):
@@ -342,60 +331,7 @@ def detect_market_structure(symbol, interval, lookback=2):
     higher_high = swing_highs[-1] > swing_highs[-2]
     higher_low = swing_lows[-1] > swing_lows[-2]
     lower_high = swing_highs[-1] < swing_highs[-2]
-    lower_low = swing_lows[-1] < swing_lows[-2]
-    if higher_high and higher_low:
-        return "UP"
-    elif lower_high and lower_low:
-        return "DOWN"
-    else:
-        return "NEUTRAL"
-
-
-def check_setup(symbol, trend, interval=None, structure="NEUTRAL"):
-    if interval is None:
-        interval = ENTRY_INTERVAL
-    candles = fetch_candles(symbol, interval)
-    if not candles or len(candles) < 12:
-        return None
-    candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
-    opens = [float(c[1]) for c in candles]
-    closes = [float(c[2]) for c in candles]
-    highs = [float(c[3]) for c in candles]
-    lows = [float(c[4]) for c in candles]
-    sma7 = sum(closes[-7:]) / 7
-    sma7_prev = sum(closes[-10:-3]) / 7
-    sma7_rising = sma7 > sma7_prev
-    sma7_falling = sma7 < sma7_prev
-    o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
-    body_low = min(o, c)
-    body_high = max(o, c)
-    mid = (h + l) / 2
-    base_buy = l <= sma7 * (1 + TOLERANCE) and body_low > sma7 * (1 - TOLERANCE) and body_low > mid
-    base_sell = h >= sma7 * (1 - TOLERANCE) and body_high < sma7 * (1 + TOLERANCE) and body_high < mid
-    buy = (trend == "UP") and (structure == "UP") and sma7_rising and base_buy
-    sell = (trend == "DOWN") and (structure == "DOWN") and sma7_falling and base_sell
-    if buy:
-        return {"side": "buy", "entry": c, "sl": l, "sma7": sma7, "mid": mid, "tf": interval}
-    elif sell:
-        return {"side": "sell", "entry": c, "sl": h, "sma7": sma7, "mid": mid, "tf": interval}
-    return None
-
-
-def calculate_position_size(entry, stop_loss, available_usdt):
-    risk_amount = CAPITAL * RISK_PER_TRADE
-    stop_distance = abs(entry - stop_loss)
-    if stop_distance == 0:
-        return 0
-    size = risk_amount / stop_distance
-    max_size_per_pos = (CAPITAL / MAX_CONCURRENT) / entry
-    size = min(size, max_size_per_pos)
-    if available_usdt > 0:
-        max_size_balance = (available_usdt * 0.95) / entry
-        size = min(size, max_size_balance)
-    return size
-
-
-def open_position(state, symbol, side, entry, stop_loss, size, timeframe):
+    def open_position(state, symbol, side, entry, stop_loss, size, timeframe):
     if side != "buy":
         return False
     if is_blocked(state):
@@ -450,7 +386,8 @@ def open_position(state, symbol, side, entry, stop_loss, size, timeframe):
         state["open_positions"].append(position)
         state["today_risk_used"] += risk_amount
         save_state(state)
-        send_telegram("🟢 <b>پوزیشن باز شد</b>\n\n" + symbol.replace("-USDT", "") + " (" + timeframe + ")\nورود: " + str(entry) + "\nاستاپ: " + str(stop_loss) + "\nحجم: $" + str(round(usdt_amount, 2)))
+        msg = "پوزیشن باز شد\n\n" + symbol.replace("-USDT", "") + " (" + timeframe + ")\nورود: " + str(entry) + "\nاستاپ: " + str(stop_loss) + "\nحجم: $" + str(round(usdt_amount, 2))
+        send_telegram(msg)
         return True
     return False
 
@@ -481,7 +418,7 @@ def close_position(state, pos, current_price, reason):
     if reason == "stop":
         state["today_stops"] = state.get("today_stops", 0) + 1
         sign = "+" if pnl >= 0 else ""
-        msg = "🔴 <b>استاپ خورد</b>\n\n" + symbol.replace("-USDT", "") + "\nقیمت: " + str(round(current_price, 4)) + "\nضرر: " + sign + str(round(pnl, 4)) + "$\n\nاستاپ امروز: " + str(state["today_stops"]) + "/4"
+        msg = "استاپ خورد\n\n" + symbol.replace("-USDT", "") + "\nقیمت: " + str(round(current_price, 4)) + "\nضرر: " + sign + str(round(pnl, 4)) + "$\n\nاستاپ امروز: " + str(state["today_stops"]) + "/4"
         send_telegram(msg)
         if state["today_risk_used"] >= CAPITAL * MAX_DAILY_RISK:
             block_for_tomorrow(state)
@@ -505,11 +442,61 @@ def update_positions(state, current_prices):
             pos["current_sl"] = new_sl
             pos["next_tp"] = new_sl + r
             print("[TP" + str(pos["tp_count"]) + "] " + symbol + " | SL -> " + str(new_sl))
-            send_telegram("📈 <b>هدف زده شد</b>\n\n" + symbol.replace("-USDT", "") + "\nقیمت: " + str(round(price, 4)) + "\nاستاپ جدید: " + str(round(new_sl, 4)))
+            msg = "هدف زده شد\n\n" + symbol.replace("-USDT", "") + "\nقیمت: " + str(round(price, 4)) + "\nاستاپ جدید: " + str(round(new_sl, 4))
+            send_telegram(msg)
             save_state(state)
+    lower_low = swing_lows[-1] < swing_lows[-2]
+    if higher_high and higher_low:
+        return "UP"
+    elif lower_high and lower_low:
+        return "DOWN"
+    else:
+        return "NEUTRAL"
 
 
-def get_current_prices(symbols):
+def check_setup(symbol, trend, interval=None, structure="NEUTRAL"):
+    if interval is None:
+        interval = ENTRY_INTERVAL
+    candles = fetch_candles(symbol, interval)
+    if not candles or len(candles) < 12:
+        return None
+    candles = sorted(candles, key=lambda x: int(x[0]))[:-1]
+    opens = [float(c[1]) for c in candles]
+    closes = [float(c[2]) for c in candles]
+    highs = [float(c[3]) for c in candles]
+    lows = [float(c[4]) for c in candles]
+    sma7 = sum(closes[-7:]) / 7
+    sma7_prev = sum(closes[-10:-3]) / 7
+    sma7_rising = sma7 > sma7_prev
+    sma7_falling = sma7 < sma7_prev
+    o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
+    body_low = min(o, c)
+    body_high = max(o, c)
+    mid = (h + l) / 2
+    base_buy = l <= sma7 * (1 + TOLERANCE) and body_low > sma7 * (1 - TOLERANCE) and body_low > mid
+    base_sell = h >= sma7 * (1 - TOLERANCE) and body_high < sma7 * (1 + TOLERANCE) and body_high < mid
+    buy = (trend == "UP") and (structure == "UP") and sma7_rising and base_buy
+    sell = (trend == "DOWN") and (structure == "DOWN") and sma7_falling and base_sell
+    if buy:
+        return {"side": "buy", "entry": c, "sl": l, "sma7": sma7, "mid": mid, "tf": interval}
+    elif sell:
+        return {"side": "sell", "entry": c, "sl": h, "sma7": sma7, "mid": mid, "tf": interval}
+    return None
+
+
+def calculate_position_size(entry, stop_loss, available_usdt):
+    risk_amount = CAPITAL * RISK_PER_TRADE
+    stop_distance = abs(entry - stop_loss)
+    if stop_distance == 0:
+        return 0
+    size = risk_amount / stop_distance
+    max_size_per_pos = (CAPITAL / MAX_CONCURRENT) / entry
+    size = min(size, max_size_per_pos)
+    if available_usdt > 0:
+        max_size_balance = (available_usdt * 0.95) / entry
+        size = min(size, max_size_balance)
+    return size
+    def get_current_prices(symbols):
     prices = {}
     for sym in symbols:
         try:
@@ -525,61 +512,56 @@ def get_current_prices(symbols):
 def send_positions_report(state, current_prices):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
-
-    now = datetime.now().strftime(
-          msg = "📊 <b>گزارش ربات</b> | " + now + "\n"
-    msg += "━━━━━━━━━━━━━━━━\n"
+    now = datetime.now().strftime("%H:%M")
+    msg = "گزارش ربات | " + now + "\n"
+    msg += "-------------------\n"
     open_pos = state["open_positions"]
-    total_unrealized = 0.0
+    total_un = 0.0
     if open_pos:
-        msg += "\n🟢 <b>پوزیشن‌های باز (" + str(len(open_pos)) + "):</b>\n"
+        msg += "باز (" + str(len(open_pos)) + "):\n"
         for p in open_pos:
             sym = p["symbol"].replace("-USDT", "")
-            entry = p["entry"]
-            price = current_prices.get(p["symbol"], entry)
-            pnl = (price - entry) * p["size"]
-            pnl_pct = ((price - entry) / entry) * 100
-            total_unrealized += pnl
-            emoji = "✅" if pnl >= 0 else "❌"
+            e = p["entry"]
+            pr = current_prices.get(p["symbol"], e)
+            pnl = (pr - e) * p["size"]
+            total_un += pnl
             sign = "+" if pnl >= 0 else ""
+            pct = ((pr - e) / e) * 100
             tf = p.get("timeframe", "?")
-            msg += "\n" + emoji + " <b>" + sym + "</b> (" + tf + ")\n"
-            msg += "   ورود: " + str(round(entry, 4)) + "\n"
-            msg += "   فعلی: " + str(round(price, 4)) + "\n"
-            msg += "   سود: " + sign + str(round(pnl, 4)) + "$ (" + sign + str(round(pnl_pct, 2)) + "%)\n"
-            msg += "   استاپ: " + str(round(p["current_sl"], 4)) + "\n"
-            msg += "   هدف: " + str(round(p["next_tp"], 4)) + "\n"
+            msg += "\n" + sym + " (" + tf + ")\n"
+            msg += "  ورود: " + str(round(e, 4)) + "\n"
+            msg += "  فعلی: " + str(round(pr, 4)) + "\n"
+            msg += "  سود: " + sign + str(round(pnl, 4)) + "$ (" + sign + str(round(pct, 2)) + "%)\n"
+            msg += "  استاپ: " + str(round(p["current_sl"], 4)) + "\n"
+            msg += "  هدف: " + str(round(p["next_tp"], 4)) + "\n"
     else:
-        msg += "\n🟢 پوزیشن باز: <b>هیچ</b>\n"
-    msg += "\n━━━━━━━━━━━━━━━━\n"
-    msg += "💰 <b>سود و ضرر:</b>\n"
-    d_pnl, d_count, d_wins = get_daily_pnl(state)
-    d_sign = "+" if d_pnl >= 0 else ""
-    d_wr = str(round(d_wins / d_count * 100)) if d_count > 0 else "0"
-    msg += "   📅 <b>امروز:</b> " + d_sign + str(round(d_pnl, 4)) + "$ (" + str(d_count) + " معامله, " + d_wr + "% برد)\n"
-    w_pnl, w_count, w_wins = get_weekly_pnl(state)
-    w_sign = "+" if w_pnl >= 0 else ""
-    w_wr = str(round(w_wins / w_count * 100)) if w_count > 0 else "0"
-    msg += "   📆 <b>هفتگی:</b> " + w_sign + str(round(w_pnl, 4)) + "$ (" + str(w_count) + " معامله, " + w_wr + "% برد)\n"
-    a_pnl, a_count, a_wins = get_all_pnl(state)
-    a_sign = "+" if a_pnl >= 0 else ""
-    a_wr = str(round(a_wins / a_count * 100)) if a_count > 0 else "0"
-    msg += "   📊 <b>کل:</b> " + a_sign + str(round(a_pnl, 4)) + "$ (" + str(a_count) + " معامله, " + a_wr + "% برد)\n"
-    sign_open = "+" if total_unrealized >= 0 else ""
-    msg += "   🔓 <b>باز:</b> " + sign_open + str(round(total_unrealized, 4)) + "$\n"
-    msg += "\n━━━━━━━━━━━━━━━━\n"
-    msg += "📈 <b>امروز:</b>\n"
-    msg += "   ریسک: " + str(round(state['today_risk_used'], 4)) + "$ / " + str(round(CAPITAL * MAX_DAILY_RISK, 2)) + "$\n"
-    msg += "   استاپ: " + str(state.get('today_stops', 0)) + "/4\n"
+        msg += "باز: هیچ\n"
+    msg += "\n-------------------\n"
+    msg += "سود و ضرر:\n"
+    d_pnl, d_n, d_w = get_daily_pnl(state)
+    w_pnl, w_n, w_w = get_weekly_pnl(state)
+    a_pnl, a_n, a_w = get_all_pnl(state)
+    ds = "+" if d_pnl >= 0 else ""
+    ws = "+" if w_pnl >= 0 else ""
+    as_ = "+" if a_pnl >= 0 else ""
+    d_wr = str(round(d_w / d_n * 100)) if d_n > 0 else "0"
+    w_wr = str(round(w_w / w_n * 100)) if w_n > 0 else "0"
+    a_wr = str(round(a_w / a_n * 100)) if a_n > 0 else "0"
+    msg += "  امروز: " + ds + str(round(d_pnl, 4)) + "$ (" + str(d_n) + " معامله, " + d_wr + "%)\n"
+    msg += "  هفته: " + ws + str(round(w_pnl, 4)) + "$ (" + str(w_n) + " معامله, " + w_wr + "%)\n"
+    msg += "  کل: " + as_ + str(round(a_pnl, 4)) + "$ (" + str(a_n) + " معامله, " + a_wr + "%)\n"
+    tus = "+" if total_un >= 0 else ""
+    msg += "  باز: " + tus + str(round(total_un, 4)) + "$\n"
+    msg += "\n-------------------\n"
+    msg += "امروز:\n"
+    msg += "  ریسک: " + str(round(state['today_risk_used'], 4)) + "$ / " + str(round(CAPITAL * MAX_DAILY_RISK, 2)) + "$\n"
+    msg += "  استاپ: " + str(state.get('today_stops', 0)) + "/4\n"
     if not DRY_RUN:
-        try:
-            msg += "\n💼 <b>کیف پول:</b>\n"
-            msg += "   USDT: $" + str(round(get_usdt_balance(), 4)) + "\n"
-            msg += "   BNB: " + str(round(get_bnb_balance(), 6)) + "\n"
-        except:
-            pass
+        msg += "\nکیف پول:\n"
+        msg += "  USDT: $" + str(round(get_usdt_balance(), 2)) + "\n"
+        msg += "  BNB: " + str(round(get_bnb_balance(), 6)) + "\n"
     if state.get("blocked_until"):
-        msg += "\n⛔ <b>معاملات متوقف تا: " + state["blocked_until"] + "</b>\n"
+        msg += "\nمتوقف تا: " + state["blocked_until"] + "\n"
     send_telegram(msg)
 
 
@@ -600,7 +582,7 @@ def main():
             print("Wallet USDT: $" + str(round(usdt_balance, 4)))
             print("Wallet BNB: " + str(round(bnb_balance, 6)))
             if bnb_balance < 0.0005:
-                send_telegram("⚠️ موجودی BNB برای گس کمه!")
+                send_telegram("هشدار: BNB کم است")
         except Exception as e:
             print("Balance check error: " + str(e))
     if is_blocked(state):
