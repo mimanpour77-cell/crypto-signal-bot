@@ -478,7 +478,8 @@ def close_position(state, pos, current_price, reason):
     if reason == "stop":
         state["today_stops"] = state.get("today_stops", 0) + 1
         sign = "+" if pnl >= 0 else ""
-        msg = "استاپ خورد\n\n" + symbol.replace("-USDT", "") + "\nقیمت: " + str(round(current_price, 4)) + "\nضرر: " + sign + str(round(pnl, 4)) + "$"
+        result = "سود" if pnl >= 0 else "ضرر"
+msg = "استاپ خورد\n\n" + symbol.replace("-USDT", "") + "\nقیمت: " + str(round(current_price, 4)) + "\n" + result + ": " + sign + str(round(pnl, 4)) + "$"
         send_telegram(msg)
         if state["today_risk_used"] >= CAPITAL * MAX_DAILY_RISK:
             block_for_tomorrow(state)
