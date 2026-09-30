@@ -1,36 +1,5 @@
 {
-  "open_positions": [
-    {
-      "symbol": "CAKE-USDT",
-      "token_address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-      "side": "buy",
-      "entry": 2.579,
-      "original_sl": 2.56,
-      "current_sl": 2.6170000000000004,
-      "size": 0.19387359441644048,
-      "R": 0.019000000000000128,
-      "next_tp": 2.6360000000000006,
-      "tp_count": 2,
-      "risk_amount": 0.0036835982939123937,
-      "timeframe": "1h",
-      "opened_at": "2026-09-30 04:16:09.842258"
-    },
-    {
-      "symbol": "XRP-USDT",
-      "token_address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
-      "side": "buy",
-      "entry": 1.49728,
-      "original_sl": 1.49249,
-      "current_sl": 1.5068599999999996,
-      "size": 0.33393887582816845,
-      "R": 0.00478999999999985,
-      "next_tp": 1.5116499999999995,
-      "tp_count": 2,
-      "risk_amount": 0.0015995672152168767,
-      "timeframe": "1h",
-      "opened_at": "2026-09-30 09:04:12.937416"
-    }
-  ],
+  "open_positions": [],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -102,10 +71,46 @@
       "pnl": 0.005,
       "closed_at": "2026-09-29 20:15:58.553563",
       "close_reason": "stop"
+    },
+    {
+      "symbol": "CAKE-USDT",
+      "token_address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+      "side": "buy",
+      "entry": 2.579,
+      "original_sl": 2.56,
+      "current_sl": 2.6170000000000004,
+      "size": 0.19387359441644048,
+      "R": 0.019000000000000128,
+      "next_tp": 2.6360000000000006,
+      "tp_count": 2,
+      "risk_amount": 0.0036835982939123937,
+      "timeframe": "1h",
+      "opened_at": "2026-09-30 04:16:09.842258",
+      "pnl": 0.0073671965878247874,
+      "closed_at": "2026-09-30 20:16:16.318465",
+      "close_reason": "stop"
+    },
+    {
+      "symbol": "XRP-USDT",
+      "token_address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+      "side": "buy",
+      "entry": 1.49728,
+      "original_sl": 1.49249,
+      "current_sl": 1.5068599999999996,
+      "size": 0.33393887582816845,
+      "R": 0.00478999999999985,
+      "next_tp": 1.5116499999999995,
+      "tp_count": 2,
+      "risk_amount": 0.0015995672152168767,
+      "timeframe": "1h",
+      "opened_at": "2026-09-30 09:04:12.937416",
+      "pnl": 0.0031991344304337535,
+      "closed_at": "2026-09-30 20:16:16.659904",
+      "close_reason": "stop"
     }
   ],
   "today_date": "2026-09-30",
   "today_risk_used": 0.00528316550912927,
-  "total_pnl": -0.0074541648621336025,
-  "today_stops": 0
+  "total_pnl": 0.0031121661561249385,
+  "today_stops": 2
 }
