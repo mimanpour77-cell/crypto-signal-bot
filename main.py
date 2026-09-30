@@ -788,5 +788,5 @@ def main():
     send_positions_report(state, current_prices)
 
 
-  if __name__ == "__main__":
+    if __name__ == "__main__":
     main()
