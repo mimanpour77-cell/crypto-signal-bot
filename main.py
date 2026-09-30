@@ -784,9 +784,9 @@ def main():
                 if size > 0:
                     open_position(state, sym, "buy", setup_1h["entry"], setup_1h["sl"], size, "1h")
         time.sleep(0.1)
-    print("=== Complete ===")
+        print("=== Complete ===")
     send_positions_report(state, current_prices)
 
 
-    if __name__ == "__main__":
+if __name__ == "__main__":
     main()
