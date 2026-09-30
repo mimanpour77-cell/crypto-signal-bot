@@ -14,6 +14,21 @@
       "risk_amount": 0.0036835982939123937,
       "timeframe": "1h",
       "opened_at": "2026-09-30 04:16:09.842258"
+    },
+    {
+      "symbol": "XRP-USDT",
+      "token_address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+      "side": "buy",
+      "entry": 1.49728,
+      "original_sl": 1.49249,
+      "current_sl": 1.49249,
+      "size": 0.33393887582816845,
+      "R": 0.00478999999999985,
+      "next_tp": 1.5020699999999998,
+      "tp_count": 0,
+      "risk_amount": 0.0015995672152168767,
+      "timeframe": "1h",
+      "opened_at": "2026-09-30 09:04:12.937416"
     }
   ],
   "closed_positions": [
@@ -90,7 +105,7 @@
     }
   ],
   "today_date": "2026-09-30",
-  "today_risk_used": 0.0036835982939123937,
+  "today_risk_used": 0.00528316550912927,
   "total_pnl": -0.0074541648621336025,
   "today_stops": 0
 }
