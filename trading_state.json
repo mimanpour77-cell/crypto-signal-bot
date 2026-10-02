@@ -6,29 +6,14 @@
       "side": "buy",
       "entry": 10.993,
       "original_sl": 10.94,
-      "current_sl": 11.046000000000001,
+      "current_sl": 11.099000000000002,
       "size": 0.045483489493313926,
       "R": 0.053000000000000824,
-      "next_tp": 11.099000000000002,
-      "tp_count": 1,
+      "next_tp": 11.152000000000003,
+      "tp_count": 2,
       "risk_amount": 0.0024106249431456754,
       "timeframe": "1h",
       "opened_at": "2026-10-02 00:21:31.573392"
-    },
-    {
-      "symbol": "SOL-USDT",
-      "token_address": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
-      "side": "buy",
-      "entry": 118.41,
-      "original_sl": 118.13,
-      "current_sl": 122.05000000000001,
-      "size": 0.004222616333079976,
-      "R": 0.28000000000000114,
-      "next_tp": 122.33000000000001,
-      "tp_count": 13,
-      "risk_amount": 0.0011823325732623982,
-      "timeframe": "1h",
-      "opened_at": "2026-10-02 00:21:34.520200"
     },
     {
       "symbol": "SOL-USDT",
@@ -189,10 +174,28 @@
       "pnl": -0.00153609831029186,
       "closed_at": "2026-10-01 16:14:54.355632",
       "close_reason": "stop"
+    },
+    {
+      "symbol": "SOL-USDT",
+      "token_address": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
+      "side": "buy",
+      "entry": 118.41,
+      "original_sl": 118.13,
+      "current_sl": 122.05000000000001,
+      "size": 0.004222616333079976,
+      "R": 0.28000000000000114,
+      "next_tp": 122.33000000000001,
+      "tp_count": 13,
+      "risk_amount": 0.0011823325732623982,
+      "timeframe": "1h",
+      "opened_at": "2026-10-02 00:21:34.520200",
+      "pnl": 0.015370323452411176,
+      "closed_at": "2026-10-02 12:18:43.313433",
+      "close_reason": "stop"
     }
   ],
   "today_date": "2026-10-02",
   "today_risk_used": 0.006304766210631085,
-  "total_pnl": -0.0006149942465757362,
-  "today_stops": 0
+  "total_pnl": 0.01475532920583544,
+  "today_stops": 1
 }
