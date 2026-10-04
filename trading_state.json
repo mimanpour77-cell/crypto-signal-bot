@@ -1,5 +1,21 @@
 {
-  "open_positions": [],
+  "open_positions": [
+    {
+      "symbol": "LTC-USDT",
+      "token_address": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+      "side": "buy",
+      "entry": 70.34,
+      "original_sl": 69.87,
+      "current_sl": 69.87,
+      "size": 0.0071083309638896785,
+      "R": 0.46999999999999886,
+      "next_tp": 70.81,
+      "tp_count": 0,
+      "risk_amount": 0.003340915553028141,
+      "timeframe": "1h",
+      "opened_at": "2026-10-04 05:49:51.625675"
+    }
+  ],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -218,7 +234,7 @@
     }
   ],
   "today_date": "2026-10-04",
-  "today_risk_used": 0.0,
+  "today_risk_used": 0.003340915553028141,
   "total_pnl": 0.015438527529118113,
   "today_stops": 1
 }
