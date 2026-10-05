@@ -14,6 +14,21 @@
       "risk_amount": 0.005,
       "timeframe": "4h",
       "opened_at": "2026-10-05 08:18:39.556185"
+    },
+    {
+      "symbol": "LINK-USDT",
+      "token_address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+      "side": "buy",
+      "entry": 14.2161,
+      "original_sl": 14.1026,
+      "current_sl": 14.1026,
+      "size": 0.03517139018436843,
+      "R": 0.11350000000000016,
+      "next_tp": 14.329600000000001,
+      "tp_count": 0,
+      "risk_amount": 0.003991952785925822,
+      "timeframe": "4h",
+      "opened_at": "2026-10-05 12:20:04.374565"
     }
   ],
   "closed_positions": [
@@ -270,7 +285,7 @@
     }
   ],
   "today_date": "2026-10-05",
-  "today_risk_used": 0.005,
+  "today_risk_used": 0.008991952785925822,
   "total_pnl": 0.01945270698943857,
   "today_stops": 1
 }
