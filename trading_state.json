@@ -1,36 +1,5 @@
 {
-  "open_positions": [
-    {
-      "symbol": "DOGE-USDT",
-      "token_address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
-      "side": "buy",
-      "entry": 0.0966,
-      "original_sl": 0.09477,
-      "current_sl": 0.09477,
-      "size": 2.7322404371584517,
-      "R": 0.0018300000000000122,
-      "next_tp": 0.09843000000000002,
-      "tp_count": 0,
-      "risk_amount": 0.005,
-      "timeframe": "4h",
-      "opened_at": "2026-10-05 08:18:39.556185"
-    },
-    {
-      "symbol": "LINK-USDT",
-      "token_address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
-      "side": "buy",
-      "entry": 14.2161,
-      "original_sl": 14.1026,
-      "current_sl": 14.1026,
-      "size": 0.03517139018436843,
-      "R": 0.11350000000000016,
-      "next_tp": 14.329600000000001,
-      "tp_count": 0,
-      "risk_amount": 0.003991952785925822,
-      "timeframe": "4h",
-      "opened_at": "2026-10-05 12:20:04.374565"
-    }
-  ],
+  "open_positions": [],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -282,10 +251,46 @@
       "pnl": -0.002667651645735827,
       "closed_at": "2026-10-05 04:17:15.895749",
       "close_reason": "stop"
+    },
+    {
+      "symbol": "DOGE-USDT",
+      "token_address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+      "side": "buy",
+      "entry": 0.0966,
+      "original_sl": 0.09477,
+      "current_sl": 0.09477,
+      "size": 2.7322404371584517,
+      "R": 0.0018300000000000122,
+      "next_tp": 0.09843000000000002,
+      "tp_count": 0,
+      "risk_amount": 0.005,
+      "timeframe": "4h",
+      "opened_at": "2026-10-05 08:18:39.556185",
+      "pnl": -0.005,
+      "closed_at": "2026-10-05 16:16:23.689423",
+      "close_reason": "stop"
+    },
+    {
+      "symbol": "LINK-USDT",
+      "token_address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+      "side": "buy",
+      "entry": 14.2161,
+      "original_sl": 14.1026,
+      "current_sl": 14.1026,
+      "size": 0.03517139018436843,
+      "R": 0.11350000000000016,
+      "next_tp": 14.329600000000001,
+      "tp_count": 0,
+      "risk_amount": 0.003991952785925822,
+      "timeframe": "4h",
+      "opened_at": "2026-10-05 12:20:04.374565",
+      "pnl": -0.003991952785925822,
+      "closed_at": "2026-10-05 16:16:24.040480",
+      "close_reason": "stop"
     }
   ],
   "today_date": "2026-10-05",
   "today_risk_used": 0.008991952785925822,
-  "total_pnl": 0.01945270698943857,
-  "today_stops": 1
+  "total_pnl": 0.010460754203512748,
+  "today_stops": 3
 }
