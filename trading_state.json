@@ -1,51 +1,5 @@
 {
-  "open_positions": [
-    {
-      "symbol": "DOT-USDT",
-      "token_address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
-      "side": "buy",
-      "entry": 1.2374,
-      "original_sl": 1.2189,
-      "current_sl": 1.2189,
-      "size": 0.27027027027027084,
-      "R": 0.01849999999999996,
-      "next_tp": 1.2559,
-      "tp_count": 0,
-      "risk_amount": 0.005,
-      "timeframe": "1h",
-      "opened_at": "2026-10-06 08:16:19.827829"
-    },
-    {
-      "symbol": "AVAX-USDT",
-      "token_address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
-      "side": "buy",
-      "entry": 11.34,
-      "original_sl": 11.207,
-      "current_sl": 11.472999999999999,
-      "size": 0.03759398496240626,
-      "R": 0.13299999999999912,
-      "next_tp": 11.605999999999998,
-      "tp_count": 1,
-      "risk_amount": 0.005,
-      "timeframe": "1h",
-      "opened_at": "2026-10-06 08:16:21.063041"
-    },
-    {
-      "symbol": "DOT-USDT",
-      "token_address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
-      "side": "buy",
-      "entry": 1.2367,
-      "original_sl": 1.2162,
-      "current_sl": 1.2162,
-      "size": 0.24390243902439068,
-      "R": 0.020499999999999963,
-      "next_tp": 1.2571999999999999,
-      "tp_count": 0,
-      "risk_amount": 0.005,
-      "timeframe": "4h",
-      "opened_at": "2026-10-06 12:18:31.369929"
-    }
-  ],
+  "open_positions": [],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -351,10 +305,64 @@
       "pnl": 0.008421913327882419,
       "closed_at": "2026-10-06 12:18:26.706889",
       "close_reason": "stop"
+    },
+    {
+      "symbol": "DOT-USDT",
+      "token_address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+      "side": "buy",
+      "entry": 1.2374,
+      "original_sl": 1.2189,
+      "current_sl": 1.2189,
+      "size": 0.27027027027027084,
+      "R": 0.01849999999999996,
+      "next_tp": 1.2559,
+      "tp_count": 0,
+      "risk_amount": 0.005,
+      "timeframe": "1h",
+      "opened_at": "2026-10-06 08:16:19.827829",
+      "pnl": -0.005,
+      "closed_at": "2026-10-06 16:16:38.533190",
+      "close_reason": "stop"
+    },
+    {
+      "symbol": "AVAX-USDT",
+      "token_address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+      "side": "buy",
+      "entry": 11.34,
+      "original_sl": 11.207,
+      "current_sl": 11.472999999999999,
+      "size": 0.03759398496240626,
+      "R": 0.13299999999999912,
+      "next_tp": 11.605999999999998,
+      "tp_count": 1,
+      "risk_amount": 0.005,
+      "timeframe": "1h",
+      "opened_at": "2026-10-06 08:16:21.063041",
+      "pnl": 0.005,
+      "closed_at": "2026-10-06 16:16:38.993396",
+      "close_reason": "stop"
+    },
+    {
+      "symbol": "DOT-USDT",
+      "token_address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+      "side": "buy",
+      "entry": 1.2367,
+      "original_sl": 1.2162,
+      "current_sl": 1.2162,
+      "size": 0.24390243902439068,
+      "R": 0.020499999999999963,
+      "next_tp": 1.2571999999999999,
+      "tp_count": 0,
+      "risk_amount": 0.005,
+      "timeframe": "4h",
+      "opened_at": "2026-10-06 12:18:31.369929",
+      "pnl": -0.005,
+      "closed_at": "2026-10-06 16:16:39.516774",
+      "close_reason": "stop"
     }
   ],
   "today_date": "2026-10-06",
   "today_risk_used": 0.019210956663941212,
-  "total_pnl": 0.018882667531395166,
-  "today_stops": 1
+  "total_pnl": 0.013882667531395165,
+  "today_stops": 4
 }
