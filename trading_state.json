@@ -1,21 +1,5 @@
 {
-  "open_positions": [
-    {
-      "symbol": "ADA-USDT",
-      "token_address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
-      "side": "buy",
-      "entry": 0.2553,
-      "original_sl": 0.254,
-      "current_sl": 0.254,
-      "size": 1.9584802193497843,
-      "R": 0.0013000000000000234,
-      "next_tp": 0.25660000000000005,
-      "tp_count": 0,
-      "risk_amount": 0.0025460242851547653,
-      "timeframe": "1h",
-      "opened_at": "2026-10-10 12:17:23.718138"
-    }
-  ],
+  "open_positions": [],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -375,10 +359,28 @@
       "pnl": -0.005,
       "closed_at": "2026-10-06 16:16:39.516774",
       "close_reason": "stop"
+    },
+    {
+      "symbol": "ADA-USDT",
+      "token_address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+      "side": "buy",
+      "entry": 0.2553,
+      "original_sl": 0.254,
+      "current_sl": 0.254,
+      "size": 1.9584802193497843,
+      "R": 0.0013000000000000234,
+      "next_tp": 0.25660000000000005,
+      "tp_count": 0,
+      "risk_amount": 0.0025460242851547653,
+      "timeframe": "1h",
+      "opened_at": "2026-10-10 12:17:23.718138",
+      "pnl": -0.0025460242851547653,
+      "closed_at": "2026-10-10 20:13:20.382893",
+      "close_reason": "stop"
     }
   ],
   "today_date": "2026-10-10",
   "today_risk_used": 0.0025460242851547653,
-  "total_pnl": 0.013882667531395165,
-  "today_stops": 0
+  "total_pnl": 0.0113366432462404,
+  "today_stops": 1
 }
