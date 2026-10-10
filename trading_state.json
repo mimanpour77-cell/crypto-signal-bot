@@ -1,5 +1,21 @@
 {
-  "open_positions": [],
+  "open_positions": [
+    {
+      "symbol": "ADA-USDT",
+      "token_address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+      "side": "buy",
+      "entry": 0.2553,
+      "original_sl": 0.254,
+      "current_sl": 0.254,
+      "size": 1.9584802193497843,
+      "R": 0.0013000000000000234,
+      "next_tp": 0.25660000000000005,
+      "tp_count": 0,
+      "risk_amount": 0.0025460242851547653,
+      "timeframe": "1h",
+      "opened_at": "2026-10-10 12:17:23.718138"
+    }
+  ],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -361,8 +377,8 @@
       "close_reason": "stop"
     }
   ],
-  "today_date": "2026-10-06",
-  "today_risk_used": 0.019210956663941212,
+  "today_date": "2026-10-10",
+  "today_risk_used": 0.0025460242851547653,
   "total_pnl": 0.013882667531395165,
-  "today_stops": 4
+  "today_stops": 0
 }
