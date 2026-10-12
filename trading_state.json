@@ -1,21 +1,5 @@
 {
-  "open_positions": [
-    {
-      "symbol": "DOT-USDT",
-      "token_address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
-      "side": "buy",
-      "entry": 1.2627,
-      "original_sl": 1.2547,
-      "current_sl": 1.2547,
-      "size": 0.39597687495050293,
-      "R": 0.008000000000000007,
-      "next_tp": 1.2707,
-      "tp_count": 0,
-      "risk_amount": 0.0031678149996040264,
-      "timeframe": "1h",
-      "opened_at": "2026-10-12 12:29:18.468497"
-    }
-  ],
+  "open_positions": [],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -411,10 +395,28 @@
       "pnl": -0.0025836279575741266,
       "closed_at": "2026-10-12 12:29:11.540046",
       "close_reason": "stop"
+    },
+    {
+      "symbol": "DOT-USDT",
+      "token_address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+      "side": "buy",
+      "entry": 1.2627,
+      "original_sl": 1.2547,
+      "current_sl": 1.2547,
+      "size": 0.39597687495050293,
+      "R": 0.008000000000000007,
+      "next_tp": 1.2707,
+      "tp_count": 0,
+      "risk_amount": 0.0031678149996040264,
+      "timeframe": "1h",
+      "opened_at": "2026-10-12 12:29:18.468497",
+      "pnl": -0.0031678149996040264,
+      "closed_at": "2026-10-12 16:16:53.728808",
+      "close_reason": "stop"
     }
   ],
   "today_date": "2026-10-12",
   "today_risk_used": 0.005751442957178153,
-  "total_pnl": 0.008753015288666274,
-  "today_stops": 1
+  "total_pnl": 0.005585200289062248,
+  "today_stops": 2
 }
