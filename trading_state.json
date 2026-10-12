@@ -1,5 +1,21 @@
 {
-  "open_positions": [],
+  "open_positions": [
+    {
+      "symbol": "AVAX-USDT",
+      "token_address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+      "side": "buy",
+      "entry": 11.031,
+      "original_sl": 10.974,
+      "current_sl": 10.974,
+      "size": 0.045326806273229985,
+      "R": 0.057000000000000384,
+      "next_tp": 11.088000000000001,
+      "tp_count": 0,
+      "risk_amount": 0.0025836279575741266,
+      "timeframe": "1h",
+      "opened_at": "2026-10-12 08:20:02.059215"
+    }
+  ],
   "closed_positions": [
     {
       "symbol": "XRP-USDT",
@@ -379,8 +395,8 @@
       "close_reason": "stop"
     }
   ],
-  "today_date": "2026-10-10",
-  "today_risk_used": 0.0025460242851547653,
+  "today_date": "2026-10-12",
+  "today_risk_used": 0.0025836279575741266,
   "total_pnl": 0.0113366432462404,
-  "today_stops": 1
+  "today_stops": 0
 }
